@@ -1,0 +1,324 @@
+import { useState } from "react";
+import { Navigation } from "@/components/Navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  MapPin, 
+  Activity, 
+  AlertTriangle, 
+  BarChart3,
+  Video,
+  Download,
+  Users,
+  Play,
+  Pause,
+  Calendar,
+  Filter
+} from "lucide-react";
+import { mockEvents, calculateMetrics, mockVideos } from "@/lib/mockData";
+
+const Dashboard = () => {
+  const [selectedEvent, setSelectedEvent] = useState(mockEvents[0]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const metrics = calculateMetrics(mockEvents);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      
+      {/* Header */}
+      <div className="pt-20 pb-6 px-4 sm:px-6 lg:px-8 border-b border-border/50 glass-card">
+        <div className="max-w-[2000px] mx-auto">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Chandigarh, Punjab</h1>
+              <p className="text-muted-foreground">Real-time road monitoring dashboard</p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="outline" className="glass-card">
+                <Calendar className="w-4 h-4 mr-2" />
+                Last 24h
+              </Button>
+              <Button variant="outline" className="glass-card">
+                <Filter className="w-4 h-4 mr-2" />
+                Filters
+              </Button>
+              <Button variant="outline" className="glass-card">
+                {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                Time-lapse
+              </Button>
+              <Button className="gradient-primary shadow-glow">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid lg:grid-cols-4 gap-6">
+          {/* Left: KPI Cards */}
+          <div className="space-y-4">
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Total Events</span>
+                  <Activity className="w-4 h-4 text-primary" />
+                </div>
+                <div className="text-2xl font-bold">{metrics.totalEvents}</div>
+                <div className="text-xs text-muted-foreground mt-1">+12% from yesterday</div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Needs Attention</span>
+                  <AlertTriangle className="w-4 h-4 text-urgent" />
+                </div>
+                <div className="text-2xl font-bold text-urgent">{metrics.needsAttention}</div>
+                <div className="text-xs text-muted-foreground mt-1">Urgent fixes required</div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Avg Roughness</span>
+                  <BarChart3 className="w-4 h-4 text-secondary" />
+                </div>
+                <div className="text-2xl font-bold">{metrics.avgRoughness}</div>
+                <div className="text-xs text-muted-foreground mt-1">Index 0-10 scale</div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Avg Impact</span>
+                  <Activity className="w-4 h-4 text-destructive" />
+                </div>
+                <div className="text-2xl font-bold">{metrics.avgImpactIntensity}</div>
+                <div className="text-xs text-muted-foreground mt-1">Severity metric</div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Traffic Density</span>
+                  <MapPin className="w-4 h-4 text-primary" />
+                </div>
+                <div className="text-2xl font-bold">{metrics.avgTrafficDensity}</div>
+                <div className="text-xs text-muted-foreground mt-1">Vehicles/frame</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Center: Map and Video */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Map Section */}
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    Interactive Map
+                  </h2>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="text-xs">
+                      Potholes
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs">
+                      AQI
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs">
+                      Traffic
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden">
+                  <div className="absolute inset-0">
+                    {mockEvents.map((event, index) => (
+                      <div
+                        key={event.id}
+                        className={`absolute w-8 h-8 rounded-full cursor-pointer transition-all hover:scale-125 ${
+                          event.needs_attention 
+                            ? 'bg-urgent/30 border-2 border-urgent animate-pulse-glow' 
+                            : 'bg-primary/30 border-2 border-primary'
+                        }`}
+                        style={{
+                          left: `${15 + index * 15}%`,
+                          top: `${20 + (index % 3) * 25}%`,
+                        }}
+                        onClick={() => setSelectedEvent(event)}
+                        title={`${event.sector} - ${event.street_name}`}
+                      >
+                        {event.needs_attention && (
+                          <div className="absolute inset-0 rounded-full bg-urgent/50 animate-ping" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-urgent border-2 border-urgent" />
+                    <span className="text-muted-foreground">Urgent</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-primary border-2 border-primary" />
+                    <span className="text-muted-foreground">Normal</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-muted border-2 border-border" />
+                    <span className="text-muted-foreground">Resolved</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Video Section */}
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Video className="w-5 h-5 text-primary" />
+                    Annotated Video
+                  </h2>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="text-xs">
+                      Bounding Boxes
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs">
+                      Telemetry
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden flex items-center justify-center">
+                  <div className="text-center space-y-4">
+                    <div className="w-20 h-20 mx-auto rounded-full gradient-primary animate-pulse-glow flex items-center justify-center">
+                      <Play className="w-10 h-10 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Select an event to view video</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {mockVideos.length} annotated videos available
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: Event Details */}
+          <div className="space-y-4">
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Event Details</h3>
+                  {selectedEvent.needs_attention && (
+                    <span className="px-2 py-1 rounded-full text-xs font-medium gradient-urgent text-urgent-foreground">
+                      Urgent
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Location</div>
+                    <div className="font-medium">{selectedEvent.sector}</div>
+                    <div className="text-sm text-muted-foreground">{selectedEvent.street_name}</div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Confidence</div>
+                      <div className="font-medium">{(selectedEvent.pothole_confidence * 100).toFixed(0)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Roughness</div>
+                      <div className="font-medium">{selectedEvent.roughness_index.toFixed(1)}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Impact</div>
+                      <div className="font-medium">{selectedEvent.impact_intensity.toFixed(1)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Validation</div>
+                      <div className="font-medium">{(selectedEvent.validation_score * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">Traffic</div>
+                    <div className="font-medium">
+                      {selectedEvent.avg_vehicles_per_frame.toFixed(1)} avg / {selectedEvent.peak_vehicle_count} peak
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">Timestamp</div>
+                    <div className="text-sm">
+                      {new Date(selectedEvent.event_timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/50 space-y-2">
+                  <Button className="w-full gradient-primary shadow-glow" size="sm">
+                    <Users className="w-4 h-4 mr-2" />
+                    Assign to Crew
+                  </Button>
+                  <Button variant="outline" className="w-full glass-card" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Details
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-6 space-y-3">
+                <h3 className="font-semibold text-sm">Sensor Telemetry</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Accel X</span>
+                    <span className="font-mono">{selectedEvent.accel.ax.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Accel Y</span>
+                    <span className="font-mono">{selectedEvent.accel.ay.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Accel Z</span>
+                    <span className="font-mono">{selectedEvent.accel.az.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Gyro</span>
+                    <span className="font-mono">{selectedEvent.gyro_intensity.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">AZ Spike</span>
+                    <span className="font-mono">{selectedEvent.az_spike.toFixed(2)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
