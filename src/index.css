@@ -167,4 +167,9 @@ All colors MUST be HSL.
       transform: translateY(-20px);
     }
   }
+
+  .leaflet-container {
+    height: 100%;
+    width: 100%;
+  }
 }

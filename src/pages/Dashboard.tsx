@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,12 +15,63 @@ import {
   Calendar,
   Filter
 } from "lucide-react";
-import { mockEvents, calculateMetrics, mockVideos } from "@/lib/mockData";
+import { mockEvents, calculateMetrics, mockVideos, Event } from "@/lib/mockData";
+import { fetchDashboardEvents, fetchDashboardVideos } from "@/lib/api";
+import { DashboardMap } from "@/components/DashboardMap";
 
 const Dashboard = () => {
-  const [selectedEvent, setSelectedEvent] = useState(mockEvents[0]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const metrics = calculateMetrics(mockEvents);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [fetchedEvents, fetchedVideos] = await Promise.all([
+          fetchDashboardEvents(),
+          fetchDashboardVideos()
+        ]);
+        setEvents(fetchedEvents);
+        setVideos(fetchedVideos);
+        
+        if (fetchedEvents.length > 0) {
+          // Try to find an event that has a corresponding video
+          const eventWithVideo = fetchedEvents.find(event => {
+            const timestampStr = event.event_timestamp.replace(/:/g, '-').replace(' ', '_');
+            return fetchedVideos.some((v: any) => v.filename && v.filename.includes(timestampStr));
+          });
+          
+          setSelectedEvent(eventWithVideo || fetchedEvents[0]);
+        }
+      } catch (error) {
+        console.error("Failed to load dashboard data", error);
+        // Fallback to mock data if fetch fails
+        setEvents(mockEvents);
+        setVideos(mockVideos);
+        setSelectedEvent(mockEvents[0]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const metrics = calculateMetrics(events.length > 0 ? events : mockEvents);
+  const displayVideos = videos.length > 0 ? videos : mockVideos;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  const displayEvents = events.length > 0 ? events : mockEvents;
+  const currentEvent = selectedEvent || displayEvents[0];
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,7 +119,6 @@ const Dashboard = () => {
                   <Activity className="w-4 h-4 text-primary" />
                 </div>
                 <div className="text-2xl font-bold">{metrics.totalEvents}</div>
-                <div className="text-xs text-muted-foreground mt-1">+12% from yesterday</div>
               </CardContent>
             </Card>
 
@@ -141,28 +191,11 @@ const Dashboard = () => {
                 </div>
                 
                 <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden">
-                  <div className="absolute inset-0">
-                    {mockEvents.map((event, index) => (
-                      <div
-                        key={event.id}
-                        className={`absolute w-8 h-8 rounded-full cursor-pointer transition-all hover:scale-125 ${
-                          event.needs_attention 
-                            ? 'bg-urgent/30 border-2 border-urgent animate-pulse-glow' 
-                            : 'bg-primary/30 border-2 border-primary'
-                        }`}
-                        style={{
-                          left: `${15 + index * 15}%`,
-                          top: `${20 + (index % 3) * 25}%`,
-                        }}
-                        onClick={() => setSelectedEvent(event)}
-                        title={`${event.sector} - ${event.street_name}`}
-                      >
-                        {event.needs_attention && (
-                          <div className="absolute inset-0 rounded-full bg-urgent/50 animate-ping" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <DashboardMap 
+                    events={displayEvents} 
+                    selectedEvent={currentEvent} 
+                    onEventSelect={setSelectedEvent} 
+                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-xs">
@@ -201,17 +234,25 @@ const Dashboard = () => {
                 </div>
 
                 <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden flex items-center justify-center">
-                  <div className="text-center space-y-4">
-                    <div className="w-20 h-20 mx-auto rounded-full gradient-primary animate-pulse-glow flex items-center justify-center">
-                      <Play className="w-10 h-10 text-white" />
+                  {currentEvent.video_url ? (
+                    <video 
+                      src={currentEvent.video_url} 
+                      controls 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center space-y-4">
+                      <div className="w-20 h-20 mx-auto rounded-full gradient-primary animate-pulse-glow flex items-center justify-center">
+                        <Play className="w-10 h-10 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Select an event to view video</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {displayVideos.length} annotated videos available
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">Select an event to view video</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {mockVideos.length} annotated videos available
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -223,7 +264,7 @@ const Dashboard = () => {
               <CardContent className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">Event Details</h3>
-                  {selectedEvent.needs_attention && (
+                  {currentEvent.needs_attention && (
                     <span className="px-2 py-1 rounded-full text-xs font-medium gradient-urgent text-urgent-foreground">
                       Urgent
                     </span>
@@ -233,43 +274,43 @@ const Dashboard = () => {
                 <div className="space-y-3">
                   <div>
                     <div className="text-xs text-muted-foreground">Location</div>
-                    <div className="font-medium">{selectedEvent.sector}</div>
-                    <div className="text-sm text-muted-foreground">{selectedEvent.street_name}</div>
+                    <div className="font-medium">{currentEvent.sector}</div>
+                    <div className="text-sm text-muted-foreground">{currentEvent.street_name}</div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <div className="text-xs text-muted-foreground">Confidence</div>
-                      <div className="font-medium">{(selectedEvent.pothole_confidence * 100).toFixed(0)}%</div>
+                      <div className="font-medium">{(currentEvent.pothole_confidence * 100).toFixed(0)}%</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Roughness</div>
-                      <div className="font-medium">{selectedEvent.roughness_index.toFixed(1)}</div>
+                      <div className="font-medium">{currentEvent.roughness_index.toFixed(1)}</div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <div className="text-xs text-muted-foreground">Impact</div>
-                      <div className="font-medium">{selectedEvent.impact_intensity.toFixed(1)}</div>
+                      <div className="font-medium">{currentEvent.impact_intensity.toFixed(1)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Validation</div>
-                      <div className="font-medium">{(selectedEvent.validation_score * 100).toFixed(0)}%</div>
+                      <div className="font-medium">{(currentEvent.validation_score * 100).toFixed(0)}%</div>
                     </div>
                   </div>
 
                   <div>
                     <div className="text-xs text-muted-foreground">Traffic</div>
                     <div className="font-medium">
-                      {selectedEvent.avg_vehicles_per_frame.toFixed(1)} avg / {selectedEvent.peak_vehicle_count} peak
+                      {currentEvent.avg_vehicles_per_frame.toFixed(1)} avg / {currentEvent.peak_vehicle_count} peak
                     </div>
                   </div>
 
                   <div>
                     <div className="text-xs text-muted-foreground">Timestamp</div>
                     <div className="text-sm">
-                      {new Date(selectedEvent.event_timestamp).toLocaleString()}
+                      {new Date(currentEvent.event_timestamp).toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -293,23 +334,23 @@ const Dashboard = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Accel X</span>
-                    <span className="font-mono">{selectedEvent.accel.ax.toFixed(3)}</span>
+                    <span className="font-mono">{currentEvent.accel.ax.toFixed(3)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Accel Y</span>
-                    <span className="font-mono">{selectedEvent.accel.ay.toFixed(3)}</span>
+                    <span className="font-mono">{currentEvent.accel.ay.toFixed(3)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Accel Z</span>
-                    <span className="font-mono">{selectedEvent.accel.az.toFixed(3)}</span>
+                    <span className="font-mono">{currentEvent.accel.az.toFixed(3)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Gyro</span>
-                    <span className="font-mono">{selectedEvent.gyro_intensity.toFixed(2)}</span>
+                    <span className="font-mono">{currentEvent.gyro_intensity.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">AZ Spike</span>
-                    <span className="font-mono">{selectedEvent.az_spike.toFixed(2)}</span>
+                    <span className="font-mono">{currentEvent.az_spike.toFixed(2)}</span>
                   </div>
                 </div>
               </CardContent>

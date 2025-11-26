@@ -1,73 +1,110 @@
-# Welcome to your Lovable project
+# Road Drivability & City Monitoring (RDCM) - Web V2
 
-## Project info
+A comprehensive web platform for monitoring road conditions, detecting potholes, and analyzing traffic data using computer vision and sensor telemetry.
 
-**URL**: https://lovable.dev/projects/31c967ba-5ead-4fd9-aa8c-b962c1d040dd
+## 🚀 Overview
 
-## How can I edit this code?
+This project consists of a modern React frontend and a FastAPI backend that processes video and sensor data to provide real-time insights into road safety and drivability.
 
-There are several ways of editing your application.
+### Key Features
+- **Interactive Map**: Visualizes road events (potholes, traffic) with severity indicators.
+- **Video Analysis**: Plays annotated videos showing detected potholes and bounding boxes.
+- **Sensor Telemetry**: Displays accelerometer and gyroscope data synchronized with events.
+- **Dashboard**: Aggregates metrics like roughness index, impact intensity, and traffic density.
 
-**Use Lovable**
+## 🛠️ Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/31c967ba-5ead-4fd9-aa8c-b962c1d040dd) and start prompting.
+### Frontend
+- **Framework**: React 18 (Vite)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Library**: Shadcn/ui, Radix UI
+- **Maps**: Leaflet / React-Leaflet
+- **State Management**: TanStack Query
 
-Changes made via Lovable will be committed automatically to this repo.
+### Backend
+- **Framework**: FastAPI (Python)
+- **ML/CV**: PyTorch, Ultralytics (YOLO)
+- **Data Processing**: Pandas, NumPy
 
-**Use your preferred IDE**
+## 📂 Project Structure
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```
+├── backend/                # FastAPI backend
+│   ├── app/               # Application source code
+│   │   ├── routers/       # API endpoints
+│   │   ├── services/      # Business logic (metrics, pipeline)
+│   │   └── core/          # Configuration
+│   ├── output/            # Generated metrics and annotated videos (Ignored in Git)
+│   ├── uploads/           # User uploads (Ignored in Git)
+│   └── weights/           # ML Model weights (Ignored in Git)
+├── src/                   # React frontend source code
+│   ├── components/        # Reusable UI components
+│   ├── pages/             # Application pages (Dashboard, Landing)
+│   ├── lib/               # Utilities and API clients
+│   └── hooks/             # Custom React hooks
+└── public/                # Static assets
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🚦 Getting Started
 
-Follow these steps:
+### Prerequisites
+- Node.js (v18+)
+- Python (v3.10+)
+- Bun (optional, for lockfile)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### 1. Backend Setup
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Navigate to the backend directory:
+```bash
+cd backend
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+Run the server:
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+### 2. Frontend Setup
+
+Navigate to the root directory (if not already there):
+```bash
+cd ..
+```
+
+Install dependencies:
+```bash
+npm install
+```
+
+Run the development server:
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📝 Data & Large Files
 
-**Use GitHub Codespaces**
+This repository ignores large files to keep the repo size manageable.
+- **Videos**: Place your input videos in `backend/uploads/video/`.
+- **Output**: Processed data and annotated videos are generated in `backend/output/`.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🤝 Contributing
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/31c967ba-5ead-4fd9-aa8c-b962c1d040dd) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
