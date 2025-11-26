@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Meter, RadialProgress } from "@/components/ui/meter";
-import { GradientMeter, SemiCircleMeter } from "@/components/ui/gradient-meter";
+import { Meter } from "@/components/ui/meter";
 import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { 
@@ -17,11 +16,137 @@ import {
   Play,
   Pause,
   Calendar,
-  Filter
+  Filter,
+  Gauge,
+  Zap,
+  TrendingUp
 } from "lucide-react";
 import { mockEvents, calculateMetrics, mockVideos, Event } from "@/lib/mockData";
 import { fetchDashboardEvents, fetchDashboardVideos } from "@/lib/api";
 import { DashboardMap } from "@/components/DashboardMap";
+
+// Custom animated gauge component for the top metrics
+const AnimatedGauge = ({ 
+  value, 
+  max, 
+  label, 
+  sublabel,
+  icon: Icon,
+  color = "primary"
+}: { 
+  value: number; 
+  max: number; 
+  label: string;
+  sublabel?: string;
+  icon: React.ElementType;
+  color?: "primary" | "warning" | "danger";
+}) => {
+  const percentage = Math.min((value / max) * 100, 100);
+  const getColor = () => {
+    if (color === "danger") return { stroke: "#ef4444", bg: "rgba(239, 68, 68, 0.1)", text: "text-red-500" };
+    if (color === "warning") return { stroke: "#f59e0b", bg: "rgba(245, 158, 11, 0.1)", text: "text-amber-500" };
+    return { stroke: "hsl(var(--primary))", bg: "hsl(var(--primary) / 0.1)", text: "text-primary" };
+  };
+  
+  // For severity-based coloring (green to red)
+  const getSeverityColor = () => {
+    if (percentage < 33) return { stroke: "#22c55e", glow: "0 0 20px rgba(34, 197, 94, 0.4)" };
+    if (percentage < 66) return { stroke: "#f59e0b", glow: "0 0 20px rgba(245, 158, 11, 0.4)" };
+    return { stroke: "#ef4444", glow: "0 0 20px rgba(239, 68, 68, 0.4)" };
+  };
+  
+  const colorConfig = color === "primary" ? getColor() : getSeverityColor();
+  const strokeColor = "stroke" in colorConfig ? colorConfig.stroke : getColor().stroke;
+  
+  const radius = 45;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative">
+        <svg width="120" height="120" className="transform -rotate-90">
+          {/* Background circle */}
+          <circle
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke="hsl(var(--muted))"
+            strokeWidth="8"
+            className="opacity-30"
+          />
+          {/* Progress circle */}
+          <motion.circle
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            style={{ 
+              filter: `drop-shadow(${("glow" in colorConfig) ? colorConfig.glow : "0 0 10px hsl(var(--primary) / 0.4)"})`
+            }}
+          />
+        </svg>
+        {/* Center content */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.5, type: "spring" }}
+          >
+            <Icon className={`w-5 h-5 mb-1 ${typeof value === 'number' && max <= 10 ? (percentage < 33 ? "text-green-500" : percentage < 66 ? "text-amber-500" : "text-red-500") : "text-primary"}`} />
+          </motion.div>
+          <motion.span 
+            className="text-2xl font-bold"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            {typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value}
+          </motion.span>
+        </div>
+      </div>
+      <div className="text-center mt-2">
+        <div className="text-sm font-medium">{label}</div>
+        {sublabel && <div className="text-xs text-muted-foreground">{sublabel}</div>}
+      </div>
+    </div>
+  );
+};
+
+// Small inline severity meter for event details
+const InlineSeverityMeter = ({ value, max, label }: { value: number; max: number; label: string }) => {
+  const percentage = (value / max) * 100;
+  const getColor = () => {
+    if (percentage < 33) return "bg-green-500";
+    if (percentage < 66) return "bg-amber-500";
+    return "bg-red-500";
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono font-medium">{value.toFixed(1)}/{max}</span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <motion.div 
+          className={`h-full ${getColor()} rounded-full`}
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        />
+      </div>
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -128,76 +253,134 @@ const Dashboard = () => {
       </div>
 
       <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Top Metrics Row - Three Key Indicators */}
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Card className="glass-card shadow-card overflow-hidden">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {/* Total Events */}
+                <motion.div 
+                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10"
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <AnimatedGauge
+                    value={metrics.totalEvents}
+                    max={1000}
+                    label="Total Events"
+                    sublabel="Last 24 hours"
+                    icon={TrendingUp}
+                    color="primary"
+                  />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-xs text-muted-foreground">Live tracking</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-500 font-medium">+12%</span> from yesterday
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Average Roughness */}
+                <motion.div 
+                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10"
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <AnimatedGauge
+                    value={metrics.avgRoughness}
+                    max={10}
+                    label="Avg Roughness"
+                    sublabel="Road Quality Index"
+                    icon={BarChart3}
+                    color="warning"
+                  />
+                  <div className="flex-1 space-y-2">
+                    <div className="text-xs text-muted-foreground">
+                      Scale: 0 (smooth) - 10 (severe)
+                    </div>
+                    <div className="flex gap-1">
+                      {[...Array(10)].map((_, i) => (
+                        <div 
+                          key={i} 
+                          className={`h-1.5 flex-1 rounded-full ${
+                            i < metrics.avgRoughness 
+                              ? metrics.avgRoughness < 3.3 ? 'bg-green-500' : metrics.avgRoughness < 6.6 ? 'bg-amber-500' : 'bg-red-500'
+                              : 'bg-muted'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Average Impact */}
+                <motion.div 
+                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/10"
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <AnimatedGauge
+                    value={metrics.avgImpactIntensity}
+                    max={5}
+                    label="Avg Impact"
+                    sublabel="Intensity Level"
+                    icon={Zap}
+                    color="danger"
+                  />
+                  <div className="flex-1 space-y-2">
+                    <div className="text-xs text-muted-foreground">
+                      Scale: 0 (low) - 5 (high)
+                    </div>
+                    <div className="flex gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <div 
+                          key={i} 
+                          className={`h-1.5 flex-1 rounded-full ${
+                            i < metrics.avgImpactIntensity 
+                              ? metrics.avgImpactIntensity < 1.7 ? 'bg-green-500' : metrics.avgImpactIntensity < 3.3 ? 'bg-amber-500' : 'bg-red-500'
+                              : 'bg-muted'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         <motion.div 
           className="grid lg:grid-cols-4 gap-6"
           variants={container}
           initial="hidden"
           animate="show"
         >
-          {/* Left: KPI Cards */}
+          {/* Left: Secondary KPI Cards */}
           <div className="space-y-4">
-            <motion.div variants={item}>
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1">Total Events</div>
-                    <div className="text-3xl font-bold">{metrics.totalEvents}</div>
-                  </div>
-                  <RadialProgress 
-                    value={metrics.totalEvents} 
-                    max={1000} 
-                    size={60} 
-                    strokeWidth={6} 
-                    className="text-primary"
-                  />
-                </CardContent>
-              </Card>
-            </motion.div>
-
             <motion.div variants={item}>
               <Card className="glass-card shadow-card border-l-4 border-l-urgent">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-muted-foreground">Needs Attention</span>
-                    <AlertTriangle className="w-4 h-4 text-urgent" />
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      <AlertTriangle className="w-4 h-4 text-urgent" />
+                    </motion.div>
                   </div>
                   <div className="text-3xl font-bold text-urgent mb-2">{metrics.needsAttention}</div>
                   <Meter value={metrics.needsAttention} max={50} color="bg-urgent" />
                   <div className="text-xs text-muted-foreground mt-2">Urgent fixes required</div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={item}>
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Avg Roughness</span>
-                    <BarChart3 className="w-4 h-4 text-secondary" />
-                  </div>
-                  <SemiCircleMeter 
-                    value={metrics.avgRoughness} 
-                    max={10} 
-                    label="Road Roughness Index"
-                    size={180}
-                  />
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={item}>
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Avg Impact</span>
-                    <Activity className="w-4 h-4 text-destructive" />
-                  </div>
-                  <SemiCircleMeter 
-                    value={metrics.avgImpactIntensity} 
-                    max={5} 
-                    label="Impact Intensity"
-                    size={180}
-                  />
                 </CardContent>
               </Card>
             </motion.div>
@@ -212,6 +395,31 @@ const Dashboard = () => {
                   <div className="text-3xl font-bold mb-2">{metrics.avgTrafficDensity}</div>
                   <Meter value={metrics.avgTrafficDensity} max={20} color="bg-primary" />
                   <div className="text-xs text-muted-foreground mt-2">Vehicles/frame</div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={item}>
+              <Card className="glass-card shadow-card">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium">Quick Stats</span>
+                    <Gauge className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Pothole Events</span>
+                      <span className="text-sm font-medium">{displayEvents.filter(e => e.pothole_confidence > 0.5).length}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">High Severity</span>
+                      <span className="text-sm font-medium text-red-500">{displayEvents.filter(e => e.roughness_index > 7).length}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Resolved Today</span>
+                      <span className="text-sm font-medium text-green-500">12</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -340,12 +548,12 @@ const Dashboard = () => {
                         max={100} 
                         color="bg-primary" 
                       />
-                      <GradientMeter 
+                      <InlineSeverityMeter 
                         label="Roughness" 
                         value={currentEvent.roughness_index} 
                         max={10} 
                       />
-                      <GradientMeter 
+                      <InlineSeverityMeter 
                         label="Impact" 
                         value={currentEvent.impact_intensity} 
                         max={5} 
