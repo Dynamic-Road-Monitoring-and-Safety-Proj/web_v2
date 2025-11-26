@@ -34,7 +34,7 @@ The system is built using **FastAPI** and is organized into a modular structure:
         *   **Visual Metrics**: Number of potholes detected, estimated area/size.
     *   **Final Output**: Produces a consolidated `pothole_events_metrics.json` file.
 
-## 📂 Project Structure
+##  Project Structure
 
 ```
 backend/

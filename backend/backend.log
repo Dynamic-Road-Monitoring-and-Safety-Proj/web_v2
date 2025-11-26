@@ -1,0 +1,19 @@
+INFO:     Will watch for changes in these directories: ['/Users/raghav_sarna/Desktop/Drive/Plaksha/Semester 5/ILGC/Web_V2/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [76479] using WatchFiles
+INFO:     Started server process [76558]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+Loading models...
+Models loaded on cpu
+INFO:     182.75.25.162:0 - "POST /api/upload/csv HTTP/1.1" 200 OK
+INFO:     202.164.41.66:0 - "POST /api/upload/video HTTP/1.1" 200 OK
+INFO:     202.164.41.66:0 - "GET /docs HTTP/1.1" 200 OK
+INFO:     202.164.41.66:0 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     202.164.41.66:0 - "GET /docs HTTP/1.1" 200 OK
+INFO:     202.164.41.66:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76558]
+INFO:     Stopping reloader process [76479]
