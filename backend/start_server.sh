@@ -6,7 +6,14 @@ set -e
 echo "Starting Backend Server..."
 
 # Activate venv
-source venv/bin/activate
+if [ -d "venv" ]; then
+    source venv/bin/activate
+elif [ -d "../.venv" ]; then
+    source ../.venv/bin/activate
+else
+    echo "Virtual environment not found!"
+    exit 1
+fi
 
 # Kill existing processes
 fuser -k 8000/tcp || true

@@ -1,6 +1,7 @@
 import { Event } from "./mockData";
 
-const API_BASE_URL = "http://localhost:8000/api"; // Adjust if your backend runs on a different port
+// const API_BASE_URL = "https://jolly-ladybug-32.loca.lt/api"; // Remote backend URL
+const API_BASE_URL = "http://localhost:8001/api"; // Local backend URL
 
 export const fetchDashboardEvents = async (): Promise<Event[]> => {
   try {
