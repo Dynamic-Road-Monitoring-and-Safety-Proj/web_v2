@@ -58,7 +58,7 @@ ultralytics
 ultralytics-thop
 urllib3
 uvicorn
-uvloop
+# uvloop
 watchfiles
 websockets
 yarl
