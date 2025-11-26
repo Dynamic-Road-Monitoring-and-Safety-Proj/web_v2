@@ -168,8 +168,32 @@ All colors MUST be HSL.
     }
   }
 
+  .animate-gradient {
+    animation: gradient 3s ease infinite;
+  }
+
+  @keyframes gradient {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
   .leaflet-container {
     height: 100%;
     width: 100%;
+  }
+}
+
+/* Custom cursor styles - hide default cursor on larger screens */
+@media (min-width: 768px) {
+  body {
+    cursor: none;
+  }
+  
+  a, button, [role="button"], input, textarea, select, [tabindex]:not([tabindex="-1"]) {
+    cursor: none;
   }
 }

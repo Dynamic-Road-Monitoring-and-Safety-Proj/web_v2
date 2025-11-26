@@ -3,7 +3,9 @@ import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Meter, RadialProgress } from "@/components/ui/meter";
+import { GradientMeter, SemiCircleMeter } from "@/components/ui/gradient-meter";
 import { motion } from "framer-motion";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { 
   MapPin, 
   Activity, 
@@ -173,9 +175,12 @@ const Dashboard = () => {
                     <span className="text-sm text-muted-foreground">Avg Roughness</span>
                     <BarChart3 className="w-4 h-4 text-secondary" />
                   </div>
-                  <div className="text-3xl font-bold mb-2">{metrics.avgRoughness}</div>
-                  <Meter value={parseFloat(metrics.avgRoughness)} max={10} color="bg-secondary" />
-                  <div className="text-xs text-muted-foreground mt-2">Index 0-10 scale</div>
+                  <SemiCircleMeter 
+                    value={metrics.avgRoughness} 
+                    max={10} 
+                    label="Road Roughness Index"
+                    size={180}
+                  />
                 </CardContent>
               </Card>
             </motion.div>
@@ -187,9 +192,12 @@ const Dashboard = () => {
                     <span className="text-sm text-muted-foreground">Avg Impact</span>
                     <Activity className="w-4 h-4 text-destructive" />
                   </div>
-                  <div className="text-3xl font-bold mb-2">{metrics.avgImpactIntensity}</div>
-                  <Meter value={parseFloat(metrics.avgImpactIntensity)} max={5} color="bg-destructive" />
-                  <div className="text-xs text-muted-foreground mt-2">Severity metric</div>
+                  <SemiCircleMeter 
+                    value={metrics.avgImpactIntensity} 
+                    max={5} 
+                    label="Impact Intensity"
+                    size={180}
+                  />
                 </CardContent>
               </Card>
             </motion.div>
@@ -202,7 +210,7 @@ const Dashboard = () => {
                     <MapPin className="w-4 h-4 text-primary" />
                   </div>
                   <div className="text-3xl font-bold mb-2">{metrics.avgTrafficDensity}</div>
-                  <Meter value={parseFloat(metrics.avgTrafficDensity)} max={20} color="bg-primary" />
+                  <Meter value={metrics.avgTrafficDensity} max={20} color="bg-primary" />
                   <div className="text-xs text-muted-foreground mt-2">Vehicles/frame</div>
                 </CardContent>
               </Card>
@@ -332,17 +340,15 @@ const Dashboard = () => {
                         max={100} 
                         color="bg-primary" 
                       />
-                      <Meter 
+                      <GradientMeter 
                         label="Roughness" 
                         value={currentEvent.roughness_index} 
                         max={10} 
-                        color="bg-secondary" 
                       />
-                      <Meter 
+                      <GradientMeter 
                         label="Impact" 
                         value={currentEvent.impact_intensity} 
                         max={5} 
-                        color="bg-destructive" 
                       />
                       <Meter 
                         label="Validation" 
@@ -385,26 +391,59 @@ const Dashboard = () => {
               <Card className="glass-card shadow-card">
                 <CardContent className="p-6 space-y-3">
                   <h3 className="font-semibold text-sm">Sensor Telemetry</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Accel X</span>
-                      <span className="font-mono">{currentEvent.accel.ax.toFixed(3)}</span>
+                  <div className="h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={[
+                          { name: 't-5', ax: currentEvent.accel.ax * 0.8, ay: currentEvent.accel.ay * 0.9, az: currentEvent.accel.az * 0.95 },
+                          { name: 't-4', ax: currentEvent.accel.ax * 1.1, ay: currentEvent.accel.ay * 0.7, az: currentEvent.accel.az * 1.02 },
+                          { name: 't-3', ax: currentEvent.accel.ax * 0.9, ay: currentEvent.accel.ay * 1.2, az: currentEvent.accel.az * 0.98 },
+                          { name: 't-2', ax: currentEvent.accel.ax * 1.3, ay: currentEvent.accel.ay * 0.85, az: currentEvent.accel.az * 1.05 },
+                          { name: 't-1', ax: currentEvent.accel.ax * 0.95, ay: currentEvent.accel.ay * 1.1, az: currentEvent.accel.az * 1.01 },
+                          { name: 'now', ax: currentEvent.accel.ax, ay: currentEvent.accel.ay, az: currentEvent.accel.az },
+                        ]}
+                        margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }} 
+                        />
+                        <Legend wrapperStyle={{ fontSize: '10px' }} />
+                        <Line type="monotone" dataKey="ax" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="Accel X" />
+                        <Line type="monotone" dataKey="ay" stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} name="Accel Y" />
+                        <Line type="monotone" dataKey="az" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} name="Accel Z" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="text-muted-foreground">X: {currentEvent.accel.ax.toFixed(3)}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Accel Y</span>
-                      <span className="font-mono">{currentEvent.accel.ay.toFixed(3)}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                      <span className="text-muted-foreground">Y: {currentEvent.accel.ay.toFixed(3)}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Accel Z</span>
-                      <span className="font-mono">{currentEvent.accel.az.toFixed(3)}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                      <span className="text-muted-foreground">Z: {currentEvent.accel.az.toFixed(3)}</span>
                     </div>
+                  </div>
+                  <div className="pt-2 border-t border-border/50 space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Gyro</span>
+                      <span className="text-muted-foreground">Gyro Intensity</span>
                       <span className="font-mono">{currentEvent.gyro_intensity.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">AZ Spike</span>
-                      <span className="font-mono">{currentEvent.az_spike.toFixed(2)}</span>
+                      <span className="font-mono text-red-500">{currentEvent.az_spike.toFixed(2)}</span>
                     </div>
                   </div>
                 </CardContent>
