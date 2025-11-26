@@ -10,7 +10,6 @@ export const fetchDashboardEvents = async (): Promise<Event[]> => {
         "ngrok-skip-browser-warning": "true",
       },
     });
-
     if (!response.ok) {
       throw new Error("Failed to fetch events");
     }
@@ -29,7 +28,6 @@ export const fetchDashboardVideos = async (): Promise<any[]> => {
         "ngrok-skip-browser-warning": "true",
       },
     });
-
     if (!response.ok) {
       throw new Error("Failed to fetch videos");
     }
