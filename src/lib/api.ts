@@ -1,7 +1,7 @@
 import { Event } from "./mockData";
+import.meta.env.VITE
 
-const API_BASE_URL = "http://localhost:8000/api"; // Adjust if your backend runs on a different port
-
+const API_BASE_URL = import.meta.env.VITE
 export const fetchDashboardEvents = async (): Promise<Event[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/dashboard/events`);
