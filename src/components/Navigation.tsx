@@ -23,12 +23,10 @@ export const Navigation = () => {
   };
 
   const navLinks = [
-    { label: "Product", href: "#product" },
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Data", href: "#data" },
-    { label: "Integrations", href: "#integrations" },
-    { label: "Pricing", href: "#pricing" },
-    { label: "Contact", href: "#contact" },
+    { label: "Alerts", href: "/alerts" },
+    { label: "Reports", href: "/reports" },
+    { label: "About", href: "/about" },
   ];
 
   return (

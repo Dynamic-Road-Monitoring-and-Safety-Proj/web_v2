@@ -1,5 +1,6 @@
 import { Layers, Video, Calendar, Users, FileJson, Cloud } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { motion } from "framer-motion";
 
 const features = [
   {
@@ -44,7 +45,13 @@ export const FeaturesSection = () => {
   return (
     <section className="py-24 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16 space-y-4">
+        <motion.div 
+          className="text-center mb-16 space-y-4"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
           <h2 className="text-4xl sm:text-5xl font-bold">
             Powerful features for{" "}
             <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -54,36 +61,43 @@ export const FeaturesSection = () => {
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
             Everything you need to detect, analyze, and act on road safety data.
           </p>
-        </div>
+        </motion.div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => (
-            <Card
+            <motion.div
               key={index}
-              className="glass-card border-border/50 hover:shadow-glow transition-all duration-300 group hover:-translate-y-1"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
             >
-              <CardContent className="p-6 space-y-4">
-                <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center group-hover:shadow-glow transition-all">
-                  <feature.icon className="w-7 h-7 text-white" />
-                </div>
-                
-                <div className="space-y-3">
-                  <h3 className="text-xl font-semibold">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    {feature.description}
-                  </p>
+              <Card
+                className="glass-card border-border/50 hover:shadow-glow transition-all duration-300 group hover:-translate-y-1 h-full"
+              >
+                <CardContent className="p-6 space-y-4">
+                  <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center group-hover:shadow-glow transition-all">
+                    <feature.icon className="w-7 h-7 text-white" />
+                  </div>
                   
-                  <ul className="space-y-2 pt-2">
-                    {feature.items.map((item, i) => (
-                      <li key={i} className="flex items-center text-sm text-muted-foreground">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary mr-2" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="space-y-3">
+                    <h3 className="text-xl font-semibold">{feature.title}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      {feature.description}
+                    </p>
+                    
+                    <ul className="space-y-2 pt-2">
+                      {feature.items.map((item, i) => (
+                        <li key={i} className="flex items-center text-sm text-muted-foreground">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary mr-2" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
       </div>
