@@ -295,14 +295,28 @@ def merge_metrics(csv_path: Path, congestion_json_path: Path, pothole_json_path:
             
         prev_flag = curr_flag
 
+    # Load existing events if file exists
+    existing_events = []
+    if FINAL_METRICS_FILE.exists():
+        try:
+            with open(FINAL_METRICS_FILE, 'r') as f:
+                existing_data = json.load(f)
+                existing_events = existing_data.get("events", [])
+        except (json.JSONDecodeError, IOError):
+            # If file is corrupted or unreadable, start fresh
+            existing_events = []
+
+    # Append new events to existing ones
+    all_events = existing_events + events
+
     # Save merged results
     final_output = {
         "metadata": {
-            "total_events": len(events),
+            "total_events": len(all_events),
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "window_duration_sec": WINDOW_SECONDS
         },
-        "events": events
+        "events": all_events
     }
 
     with open(FINAL_METRICS_FILE, 'w') as f:
