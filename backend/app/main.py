@@ -32,6 +32,8 @@ app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 
 # Also mount without /api prefix for backwards compatibility
 app.include_router(upload.router, tags=["Upload (no prefix)"])
+app.include_router(process.router, tags=["Process (no prefix)"])
+app.include_router(dashboard.router, tags=["Dashboard (no prefix)"])
 
 # Serve static files (outputs)
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")

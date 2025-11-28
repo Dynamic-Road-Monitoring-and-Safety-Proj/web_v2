@@ -1,7 +1,9 @@
 import { Event } from "./mockData";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; 
-// Example: VITE_API_BASE_URL="https://your-ngrok-url/..."
+// Remove trailing slash if present
+const rawUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = rawUrl.replace(/\/$/, "");
+// Example: VITE_API_URL="https://your-ngrok-url"
 
 export const fetchDashboardEvents = async (): Promise<Event[]> => {
   try {
