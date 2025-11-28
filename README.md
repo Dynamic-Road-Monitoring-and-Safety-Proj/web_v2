@@ -95,6 +95,12 @@ npm run dev
 
 The application will be available at `http://localhost:8080`.
 
+Deploy
+```
+vercel login
+vercel --prod --yes
+```
+
 ## 📝 Data & Large Files
 
 This repository ignores large files to keep the repo size manageable.
