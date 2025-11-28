@@ -162,6 +162,7 @@ const Dashboard = () => {
   const [unprocessedCount, setUnprocessedCount] = useState<number>(0);
   const [annotatedVideos, setAnnotatedVideos] = useState<AnnotatedVideo[]>([]);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const fetchProcessingStatus = async () => {
     const status = await getProcessingStatus();
@@ -571,7 +572,10 @@ const Dashboard = () => {
                       <span className="text-sm text-muted-foreground">Select Video:</span>
                       <Select
                         value={selectedVideoUrl || ""}
-                        onValueChange={(url) => setSelectedVideoUrl(url)}
+                        onValueChange={(url) => {
+                          setVideoError(null);
+                          setSelectedVideoUrl(url);
+                        }}
                       >
                         <SelectTrigger className="w-full max-w-md">
                           <SelectValue placeholder="Select a video" />
@@ -588,18 +592,41 @@ const Dashboard = () => {
                   )}
 
                   <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden flex items-center justify-center">
-                    {selectedVideoUrl ? (
+                    {videoError ? (
+                      <div className="text-center space-y-4">
+                        <div className="w-20 h-20 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
+                          <AlertTriangle className="w-10 h-10 text-red-500" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-red-500">Video failed to load</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {videoError}
+                          </p>
+                        </div>
+                      </div>
+                    ) : selectedVideoUrl ? (
                       <video 
                         key={selectedVideoUrl}
                         src={selectedVideoUrl} 
                         controls 
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const video = e.target as HTMLVideoElement;
+                          const selectedVideo = annotatedVideos.find(v => v.url === selectedVideoUrl);
+                          if (selectedVideo && selectedVideo.size_mb > 100) {
+                            setVideoError(`Video too large (${selectedVideo.size_mb} MB). Try downloading instead.`);
+                          } else {
+                            setVideoError("Failed to load video. The file may be corrupted or unavailable.");
+                          }
+                        }}
+                        onLoadStart={() => setVideoError(null)}
                       />
                     ) : currentEvent.video_url ? (
                       <video 
                         src={currentEvent.video_url} 
                         controls 
                         className="w-full h-full object-cover"
+                        onError={() => setVideoError("Failed to load video from event.")}
                       />
                     ) : (
                       <div className="text-center space-y-4">
