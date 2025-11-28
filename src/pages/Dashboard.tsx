@@ -19,10 +19,12 @@ import {
   Filter,
   Gauge,
   Zap,
-  TrendingUp
+  TrendingUp,
+  Cog,
+  Loader2
 } from "lucide-react";
 import { mockEvents, calculateMetrics, mockVideos, Event } from "@/lib/mockData";
-import { fetchDashboardEvents, fetchDashboardVideos } from "@/lib/api";
+import { fetchDashboardEvents, fetchDashboardVideos, processAllData, getProcessingStatus } from "@/lib/api";
 import { DashboardMap } from "@/components/DashboardMap";
 
 // Custom animated gauge component for the top metrics
@@ -154,6 +156,36 @@ const Dashboard = () => {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState<string | null>(null);
+  const [unprocessedCount, setUnprocessedCount] = useState<number>(0);
+
+  const fetchProcessingStatus = async () => {
+    const status = await getProcessingStatus();
+    setUnprocessedCount(status.unprocessed);
+  };
+
+  const handleProcessAll = async () => {
+    try {
+      setIsProcessing(true);
+      setProcessingMessage("Starting ML pipeline...");
+      const result = await processAllData();
+      setProcessingMessage(`Processing ${result.total_pairs} video(s) in background...`);
+      
+      // Clear message after 5 seconds
+      setTimeout(() => {
+        setProcessingMessage(null);
+        setIsProcessing(false);
+        fetchProcessingStatus(); // Refresh count
+      }, 5000);
+    } catch (error: any) {
+      setProcessingMessage(`Error: ${error.message}`);
+      setTimeout(() => {
+        setProcessingMessage(null);
+        setIsProcessing(false);
+      }, 3000);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -164,6 +196,9 @@ const Dashboard = () => {
         ]);
         setEvents(fetchedEvents);
         setVideos(fetchedVideos);
+        
+        // Fetch processing status
+        fetchProcessingStatus();
         
         if (fetchedEvents.length > 0) {
           // Try to find an event that has a corresponding video
@@ -231,6 +266,24 @@ const Dashboard = () => {
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
+              <Button 
+                variant="outline" 
+                className="glass-card relative"
+                onClick={handleProcessAll}
+                disabled={isProcessing || unprocessedCount === 0}
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Cog className="w-4 h-4 mr-2" />
+                )}
+                {isProcessing ? "Processing..." : "Process All"}
+                {unprocessedCount > 0 && !isProcessing && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {unprocessedCount}
+                  </span>
+                )}
+              </Button>
               <Button variant="outline" className="glass-card">
                 <Calendar className="w-4 h-4 mr-2" />
                 Last 24h
@@ -249,6 +302,14 @@ const Dashboard = () => {
               </Button>
             </div>
           </div>
+          {processingMessage && (
+            <div className="mt-4">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+                {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                {processingMessage}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

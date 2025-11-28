@@ -38,3 +38,38 @@ export const fetchDashboardVideos = async (): Promise<any[]> => {
     return [];
   }
 };
+
+export const processAllData = async (): Promise<{ message: string; total_pairs: number; pairs: { video: string; csv: string }[] }> => {
+  const response = await fetch(`${API_BASE_URL}/process-all`, {
+    method: "POST",
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+    },
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to start processing");
+  }
+
+  return await response.json();
+};
+
+export const getProcessingStatus = async (): Promise<{ total_videos: number; processed: number; unprocessed: number; unprocessed_files: string[] }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/process/status`, {
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error("Failed to fetch processing status");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching processing status:", error);
+    return { total_videos: 0, processed: 0, unprocessed: 0, unprocessed_files: [] };
+  }
+};
