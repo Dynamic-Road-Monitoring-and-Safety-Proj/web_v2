@@ -3,6 +3,7 @@ import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { 
@@ -24,7 +25,7 @@ import {
   Loader2
 } from "lucide-react";
 import { mockEvents, calculateMetrics, mockVideos, Event } from "@/lib/mockData";
-import { fetchDashboardEvents, fetchDashboardVideos, processAllData, getProcessingStatus } from "@/lib/api";
+import { fetchDashboardEvents, fetchDashboardVideos, processAllData, getProcessingStatus, getAnnotatedVideos, AnnotatedVideo } from "@/lib/api";
 import { DashboardMap } from "@/components/DashboardMap";
 
 // Custom animated gauge component for the top metrics
@@ -159,6 +160,8 @@ const Dashboard = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState<string | null>(null);
   const [unprocessedCount, setUnprocessedCount] = useState<number>(0);
+  const [annotatedVideos, setAnnotatedVideos] = useState<AnnotatedVideo[]>([]);
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
 
   const fetchProcessingStatus = async () => {
     const status = await getProcessingStatus();
@@ -190,12 +193,19 @@ const Dashboard = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [fetchedEvents, fetchedVideos] = await Promise.all([
+        const [fetchedEvents, fetchedVideos, fetchedAnnotatedVideos] = await Promise.all([
           fetchDashboardEvents(),
-          fetchDashboardVideos()
+          fetchDashboardVideos(),
+          getAnnotatedVideos(5)
         ]);
         setEvents(fetchedEvents);
         setVideos(fetchedVideos);
+        setAnnotatedVideos(fetchedAnnotatedVideos);
+        
+        // Set the first annotated video as selected if available
+        if (fetchedAnnotatedVideos.length > 0) {
+          setSelectedVideoUrl(fetchedAnnotatedVideos[0].url);
+        }
         
         // Fetch processing status
         fetchProcessingStatus();
@@ -555,8 +565,37 @@ const Dashboard = () => {
                     </div>
                   </div>
 
+                  {/* Video Selector Dropdown */}
+                  {annotatedVideos.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Select Video:</span>
+                      <Select
+                        value={selectedVideoUrl || ""}
+                        onValueChange={(url) => setSelectedVideoUrl(url)}
+                      >
+                        <SelectTrigger className="w-full max-w-md">
+                          <SelectValue placeholder="Select a video" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {annotatedVideos.map((video) => (
+                            <SelectItem key={video.filename} value={video.url}>
+                              {video.filename} ({video.size_mb} MB)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden flex items-center justify-center">
-                    {currentEvent.video_url ? (
+                    {selectedVideoUrl ? (
+                      <video 
+                        key={selectedVideoUrl}
+                        src={selectedVideoUrl} 
+                        controls 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : currentEvent.video_url ? (
                       <video 
                         src={currentEvent.video_url} 
                         controls 
@@ -568,9 +607,9 @@ const Dashboard = () => {
                           <Play className="w-10 h-10 text-white" />
                         </div>
                         <div>
-                          <p className="font-medium">Select an event to view video</p>
+                          <p className="font-medium">No annotated videos available</p>
                           <p className="text-sm text-muted-foreground mt-1">
-                            {displayVideos.length} annotated videos available
+                            Process videos to generate annotated output
                           </p>
                         </div>
                       </div>

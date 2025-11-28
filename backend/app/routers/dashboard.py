@@ -1,10 +1,43 @@
 from fastapi import APIRouter, HTTPException
 from pathlib import Path
 import json
+import os
 from typing import List, Dict, Any
 from app.core.config import OUTPUT_DIR
 
 router = APIRouter()
+
+@router.get("/dashboard/annotated-videos")
+async def get_annotated_videos(limit: int = 5):
+    """List actual annotated video files on disk, sorted by modification time (most recent first)."""
+    annotated_vids_dir = OUTPUT_DIR / "annotated_vids"
+    
+    if not annotated_vids_dir.exists():
+        return []
+    
+    try:
+        # Get all mp4 files in the directory
+        video_files = list(annotated_vids_dir.glob("*_annotated.mp4"))
+        
+        # Sort by modification time, most recent first
+        video_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        
+        # Limit to requested number
+        video_files = video_files[:limit]
+        
+        # Build response
+        result = []
+        for video_file in video_files:
+            result.append({
+                "filename": video_file.name,
+                "url": f"http://localhost:8000/output/annotated_vids/{video_file.name}",
+                "modified": video_file.stat().st_mtime,
+                "size_mb": round(video_file.stat().st_size / (1024 * 1024), 2)
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing annotated videos: {str(e)}")
 
 @router.get("/dashboard/events")
 async def get_dashboard_events():

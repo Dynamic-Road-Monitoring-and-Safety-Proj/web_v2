@@ -75,3 +75,29 @@ export const getProcessingStatus = async (): Promise<{ total_videos: number; pro
     return { total_videos: 0, processed: 0, unprocessed: 0, unprocessed_files: [] };
   }
 };
+
+export interface AnnotatedVideo {
+  filename: string;
+  url: string;
+  modified: number;
+  size_mb: number;
+}
+
+export const getAnnotatedVideos = async (limit: number = 5): Promise<AnnotatedVideo[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/annotated-videos?limit=${limit}`, {
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error("Failed to fetch annotated videos");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching annotated videos:", error);
+    return [];
+  }
+};
