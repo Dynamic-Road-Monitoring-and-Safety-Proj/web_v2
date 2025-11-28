@@ -42,7 +42,7 @@ export const fetchDashboardVideos = async (): Promise<any[]> => {
 };
 
 export const processAllData = async (): Promise<{ message: string; total_pairs: number; pairs: { video: string; csv: string }[] }> => {
-  const response = await fetch(`${API_BASE_URL}/process-all`, {
+  const response = await fetch(`${API_BASE_URL}/process/all`, {
     method: "POST",
     headers: {
       "ngrok-skip-browser-warning": "true",

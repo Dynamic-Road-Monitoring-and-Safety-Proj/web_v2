@@ -35,6 +35,84 @@ async def get_processing_status():
     }
 
 
+@router.post("/process/all")
+async def process_all_endpoint(background_tasks: BackgroundTasks):
+    """Process all unprocessed videos with their matching CSVs."""
+    # Get all video files
+    video_files = list(VIDEO_DIR.glob("*.mp4")) + list(VIDEO_DIR.glob("*.avi")) + list(VIDEO_DIR.glob("*.mov"))
+    csv_files = list(CSV_DIR.glob("*.csv"))
+    
+    # Return friendly messages for missing files
+    if not video_files and not csv_files:
+        return {
+            "message": "No files found",
+            "error": "Both video and CSV files are missing. Please upload files first.",
+            "total_pairs": 0,
+            "missing": {"videos": True, "csv": True}
+        }
+    
+    if not video_files:
+        return {
+            "message": "No video files found",
+            "error": "Please upload video files to process.",
+            "total_pairs": 0,
+            "missing": {"videos": True, "csv": False},
+            "available_csv": [c.name for c in csv_files]
+        }
+    
+    if not csv_files:
+        return {
+            "message": "No CSV files found",
+            "error": "Please upload CSV sensor data files to process.",
+            "total_pairs": 0,
+            "missing": {"videos": False, "csv": True},
+            "available_videos": [v.name for v in video_files]
+        }
+    
+    # Match videos with CSVs by date
+    pairs_to_process = []
+    unmatched_videos = []
+    for video_path in video_files:
+        video_date = video_path.stem.split('_')[0]  # Extract date from filename like 2025-11-28_HH-MM-SS
+        
+        # Find matching CSV
+        matching_csv = None
+        for csv_path in csv_files:
+            if video_date in csv_path.stem:
+                matching_csv = csv_path
+                break
+        
+        if matching_csv:
+            pairs_to_process.append((video_path, matching_csv))
+        else:
+            unmatched_videos.append(video_path.name)
+            print(f"Warning: No matching CSV found for video {video_path.name}")
+    
+    if not pairs_to_process:
+        return {
+            "message": "No matching video-CSV pairs found",
+            "error": "Videos and CSVs must have matching dates (e.g., video: 2025-11-28_14-42-00.mp4, csv: 2025-11-28.csv)",
+            "total_pairs": 0,
+            "unmatched_videos": unmatched_videos,
+            "available_csv": [c.name for c in csv_files]
+        }
+    
+    # Run all in background
+    background_tasks.add_task(run_batch_pipeline, pairs_to_process)
+    
+    response = {
+        "message": "Batch processing started",
+        "total_pairs": len(pairs_to_process),
+        "pairs": [{"video": v.name, "csv": c.name} for v, c in pairs_to_process]
+    }
+    
+    if unmatched_videos:
+        response["unmatched_videos"] = unmatched_videos
+        response["warning"] = f"{len(unmatched_videos)} video(s) had no matching CSV"
+    
+    return response
+
+
 @router.post("/process/{video_filename}")
 async def process_video_endpoint(video_filename: str, csv_filename: str, background_tasks: BackgroundTasks):
     video_path = VIDEO_DIR / video_filename
@@ -49,48 +127,6 @@ async def process_video_endpoint(video_filename: str, csv_filename: str, backgro
     background_tasks.add_task(run_full_pipeline, video_path, csv_path)
     
     return {"message": "Processing started", "video": video_filename, "csv": csv_filename}
-
-
-@router.post("/process-all")
-async def process_all_endpoint(background_tasks: BackgroundTasks):
-    """Process all unprocessed videos with their matching CSVs."""
-    # Get all video files
-    video_files = list(VIDEO_DIR.glob("*.mp4")) + list(VIDEO_DIR.glob("*.avi")) + list(VIDEO_DIR.glob("*.mov"))
-    csv_files = list(CSV_DIR.glob("*.csv"))
-    
-    if not video_files:
-        raise HTTPException(status_code=404, detail="No video files found")
-    if not csv_files:
-        raise HTTPException(status_code=404, detail="No CSV files found")
-    
-    # Match videos with CSVs by date
-    pairs_to_process = []
-    for video_path in video_files:
-        video_date = video_path.stem.split('_')[0]  # Extract date from filename like 2025-11-28_HH-MM-SS
-        
-        # Find matching CSV
-        matching_csv = None
-        for csv_path in csv_files:
-            if video_date in csv_path.stem:
-                matching_csv = csv_path
-                break
-        
-        if matching_csv:
-            pairs_to_process.append((video_path, matching_csv))
-        else:
-            print(f"Warning: No matching CSV found for video {video_path.name}")
-    
-    if not pairs_to_process:
-        raise HTTPException(status_code=404, detail="No matching video-CSV pairs found")
-    
-    # Run all in background
-    background_tasks.add_task(run_batch_pipeline, pairs_to_process)
-    
-    return {
-        "message": "Batch processing started",
-        "total_pairs": len(pairs_to_process),
-        "pairs": [{"video": v.name, "csv": c.name} for v, c in pairs_to_process]
-    }
 
 
 def run_batch_pipeline(pairs: list):
