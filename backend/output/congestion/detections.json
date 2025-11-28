@@ -480,6 +480,134 @@
     },
     "2025-11-28_14-43-00_frame_13.jpg": {
       "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_0.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_1.jpg": {
+      "Truck": 1,
+      "Truck_coverage": 0.672995,
+      "total_vehicle_coverage": 0.672995
+    },
+    "2025-11-28_15-15-51_frame_2.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_3.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_4.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_5.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_6.jpg": {
+      "E-Rickshaw": 1,
+      "E-Rickshaw_coverage": 0.601291,
+      "total_vehicle_coverage": 0.601291
+    },
+    "2025-11-28_15-15-51_frame_7.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-51_frame_8.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.517507,
+      "total_vehicle_coverage": 0.517507
+    },
+    "2025-11-28_15-15-51_frame_9.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.482592,
+      "total_vehicle_coverage": 0.482592
+    },
+    "2025-11-28_15-15-51_frame_10.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.504226,
+      "total_vehicle_coverage": 0.504226
+    },
+    "2025-11-28_15-15-51_frame_11.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.506165,
+      "total_vehicle_coverage": 0.506165
+    },
+    "2025-11-28_15-15-57_frame_0.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-57_frame_1.jpg": {
+      "Truck": 1,
+      "Truck_coverage": 0.672995,
+      "total_vehicle_coverage": 0.672995
+    },
+    "2025-11-28_15-15-57_frame_2.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-57_frame_3.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-57_frame_4.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-57_frame_5.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-57_frame_6.jpg": {
+      "E-Rickshaw": 1,
+      "E-Rickshaw_coverage": 0.601291,
+      "total_vehicle_coverage": 0.601291
+    },
+    "2025-11-28_15-15-57_frame_7.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-15-57_frame_8.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.517507,
+      "total_vehicle_coverage": 0.517507
+    },
+    "2025-11-28_15-15-57_frame_9.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.482592,
+      "total_vehicle_coverage": 0.482592
+    },
+    "2025-11-28_15-15-57_frame_10.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.504226,
+      "total_vehicle_coverage": 0.504226
+    },
+    "2025-11-28_15-15-57_frame_11.jpg": {
+      "Auto-Rickshaw": 1,
+      "Auto-Rickshaw_coverage": 0.506165,
+      "total_vehicle_coverage": 0.506165
+    },
+    "2025-11-28_15-16-08_frame_0.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_1.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_2.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_3.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_4.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_5.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_6.jpg": {
+      "Tractor": 1,
+      "Tractor_coverage": 0.989447,
+      "total_vehicle_coverage": 0.989447
+    },
+    "2025-11-28_15-16-08_frame_7.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_8.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-11-28_15-16-08_frame_9.jpg": {
+      "total_vehicle_coverage": 0.0
     }
   }
 }
