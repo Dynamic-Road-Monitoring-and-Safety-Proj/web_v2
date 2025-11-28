@@ -17,10 +17,27 @@ async def get_annotated_videos(limit: int = 5):
     
     try:
         # Get all mp4 files in the directory
-        video_files = list(annotated_vids_dir.glob("*_annotated.mp4"))
+        video_files = list(annotated_vids_dir.glob("*_annotated*.mp4"))
         
-        # Sort by modification time, most recent first
-        video_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        # Pinned videos to always show at top
+        pinned_filenames = [
+            "2025-11-12_21-26-34_annotated_10.mp4",
+            "2026-11-12_10-26-34_annotated_10.mp4"
+        ]
+        
+        pinned = []
+        others = []
+        for video_file in video_files:
+            if video_file.name in pinned_filenames:
+                pinned.append(video_file)
+            else:
+                others.append(video_file)
+        
+        # Sort others by modification time, most recent first
+        others.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        
+        # Pinned first, then others
+        video_files = pinned + others
         
         # Limit to requested number
         video_files = video_files[:limit]
