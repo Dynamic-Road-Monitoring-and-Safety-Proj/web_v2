@@ -9,9 +9,9 @@ echo "Starting Backend Server..."
 source venv/bin/activate
 
 # Kill existing processes
-fuser -k 8000/tcp || true
+fuser -k 8001/tcp || true
 pkill -f uvicorn || true
-pkill -f "lt --port 8000" || true
+pkill -f "lt --port 8001" || true
 # Wait a moment for the port to clear
 sleep 2
 

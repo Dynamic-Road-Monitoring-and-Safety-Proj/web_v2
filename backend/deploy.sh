@@ -39,15 +39,15 @@ fi
 
 # 6. Start the Backend Server
 echo "Starting FastAPI backend..."
-# Kill any existing process on port 8000
-fuser -k 8000/tcp || true
+# Kill any existing process on the target port
+PORT=8001
+fuser -k $PORT/tcp || true
 pkill -f uvicorn || true
 # Wait a moment for the port to clear
 sleep 2
 
 # Start uvicorn in the background
 # Use a different port if 8000 is stuck
-PORT=8001
 echo "Using port $PORT"
 
 nohup uvicorn app.main:app --host 0.0.0.0 --port $PORT > backend.log 2>&1 &

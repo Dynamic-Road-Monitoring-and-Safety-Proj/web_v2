@@ -194,6 +194,16 @@ export interface KPIMetrics {
 
 export const calculateMetrics = (events: Event[]): KPIMetrics => {
   const totalEvents = events.length;
+  if (totalEvents === 0) {
+    return {
+      totalEvents: 0,
+      needsAttention: 0,
+      avgRoughness: 0,
+      avgImpactIntensity: 0,
+      avgTrafficDensity: 0,
+      avgAQI: 68,
+    };
+  }
   const needsAttention = events.filter(e => e.needs_attention).length;
   const avgRoughness = events.reduce((sum, e) => sum + e.roughness_index, 0) / totalEvents;
   const avgImpactIntensity = events.reduce((sum, e) => sum + e.impact_intensity, 0) / totalEvents;

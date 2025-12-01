@@ -7,8 +7,20 @@ from pathlib import Path
 
 # Configuration
 BASE_URL = "http://127.0.0.1:8000"
-VIDEO_PATH = Path("/Users/raghav_sarna/Desktop/Drive/Plaksha/Semester 5/ILGC/testing_data/2025-11-12_10-37-18.mp4")
-CSV_PATH = Path("/Users/raghav_sarna/Desktop/Drive/Plaksha/Semester 5/ILGC/testing_data/2025-11-12.csv")
+
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--video", help="Path to video file")
+parser.add_argument("--csv", help="Path to CSV file")
+args = parser.parse_args()
+
+# Default paths relative to project root if not provided
+PROJECT_ROOT = Path(__file__).parent.parent
+DEFAULT_VIDEO = PROJECT_ROOT / "testing_data" / "2025-11-12_10-37-18.mp4"
+DEFAULT_CSV = PROJECT_ROOT / "testing_data" / "2025-11-12.csv"
+
+VIDEO_PATH = Path(args.video) if args.video else Path(os.getenv("TEST_VIDEO_PATH", DEFAULT_VIDEO))
+CSV_PATH = Path(args.csv) if args.csv else Path(os.getenv("TEST_CSV_PATH", DEFAULT_CSV))
 
 def is_server_running():
     try:

@@ -94,7 +94,7 @@ async def get_dashboard_events():
                 "avg_vehicles_per_frame": event.get("avg_vehicles_per_frame"),
                 "peak_vehicle_count": event.get("peak_vehicle_count"),
                 "needs_attention": event.get("needs_attention"),
-                "validation_score": event.get("validation_score", 0) / 100.0 if event.get("validation_score") > 1 else event.get("validation_score"),
+                "validation_score": event.get("validation_score", 0) / 100.0 if event.get("validation_score", 0) > 1 else event.get("validation_score", 0),
                 "sector": "Unknown Sector", # Placeholder as it's not in the JSON
                 "street_name": "Unknown Street", # Placeholder
                 "accel": {

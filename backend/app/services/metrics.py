@@ -100,7 +100,7 @@ def merge_metrics(csv_path: Path, congestion_json_path: Path, pothole_json_path:
                             'z': float(row.get('GyroZ', 0))
                         })
 
-            except Exception as e:
+            except (KeyError, ValueError, TypeError):
                 continue # Skip bad rows
 
     # 2. Load CV Data
@@ -122,7 +122,8 @@ def merge_metrics(csv_path: Path, congestion_json_path: Path, pothole_json_path:
                     'type': 'pothole_cv',
                     'data': dets
                 })
-            except: continue
+            except (KeyError, ValueError, TypeError):
+                continue
 
     # Process congestion data
     for date_key, frames in congestion_data.items():
@@ -134,7 +135,8 @@ def merge_metrics(csv_path: Path, congestion_json_path: Path, pothole_json_path:
                     'type': 'congestion_cv',
                     'data': dets
                 })
-            except: continue
+            except (KeyError, ValueError, TypeError):
+                continue
             
     # Sort all by timestamp
     sensor_data.sort(key=lambda x: x['timestamp'])
