@@ -87,5 +87,51 @@
     "2025-11-28_15-15-57_frame_7.jpg": {
       "barricades": 1
     }
+  },
+  "2025-12-11": {
+    "2025-12-11_22-22-16_frame_9.jpg": {
+      "barricades": 1
+    },
+    "2025-12-11_22-22-16_frame_10.jpg": {
+      "barricades": 1
+    },
+    "2025-12-11_22-22-16_frame_12.jpg": {
+      "barricades": 1
+    },
+    "2025-12-11_22-22-24_frame_1.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.019528
+    },
+    "2025-12-11_22-22-24_frame_3.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.02461
+    },
+    "2025-12-11_22-22-24_frame_5.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.00728
+    },
+    "2025-12-11_22-22-24_frame_7.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.013782
+    },
+    "2025-12-11_22-22-24_frame_9.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.009102
+    },
+    "2025-12-11_22-22-24_frame_11.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.394297
+    },
+    "2025-12-11_22-22-24_frame_16.jpg": {
+      "barricades": 1
+    },
+    "2025-12-11_22-22-29_frame_10.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.001445
+    },
+    "2025-12-11_22-22-29_frame_11.jpg": {
+      "potholes": 1,
+      "total_pothole_size": 0.000317
+    }
   }
 }

@@ -609,5 +609,273 @@
     "2025-11-28_15-16-08_frame_9.jpg": {
       "total_vehicle_coverage": 0.0
     }
+  },
+  "2025-12-11": {
+    "2025-12-11_22-22-16_frame_0.jpg": {
+      "Truck": 1,
+      "Truck_coverage": 0.966093,
+      "total_vehicle_coverage": 0.966093
+    },
+    "2025-12-11_22-22-16_frame_1.jpg": {
+      "Truck": 1,
+      "Truck_coverage": 0.948977,
+      "total_vehicle_coverage": 0.948977
+    },
+    "2025-12-11_22-22-16_frame_2.jpg": {
+      "Truck": 1,
+      "Truck_coverage": 0.989311,
+      "total_vehicle_coverage": 0.989311
+    },
+    "2025-12-11_22-22-16_frame_3.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-12-11_22-22-16_frame_4.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-12-11_22-22-16_frame_5.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-12-11_22-22-16_frame_6.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-12-11_22-22-16_frame_7.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-12-11_22-22-16_frame_8.jpg": {
+      "total_vehicle_coverage": 0.0
+    },
+    "2025-12-11_22-22-16_frame_9.jpg": {
+      "Car": 4,
+      "Car_coverage": 0.065456,
+      "total_vehicle_coverage": 0.065456
+    },
+    "2025-12-11_22-22-16_frame_10.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.063035,
+      "total_vehicle_coverage": 0.063035
+    },
+    "2025-12-11_22-22-16_frame_11.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.063665,
+      "total_vehicle_coverage": 0.063665
+    },
+    "2025-12-11_22-22-16_frame_12.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.059512,
+      "total_vehicle_coverage": 0.059512
+    },
+    "2025-12-11_22-22-24_frame_0.jpg": {
+      "Car": 2,
+      "Car_coverage": 0.041046,
+      "total_vehicle_coverage": 0.041046
+    },
+    "2025-12-11_22-22-24_frame_1.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.043788,
+      "total_vehicle_coverage": 0.043788
+    },
+    "2025-12-11_22-22-24_frame_2.jpg": {
+      "Car": 3,
+      "motorcycle": 1,
+      "Car_coverage": 0.043179,
+      "motorcycle_coverage": 0.016952,
+      "total_vehicle_coverage": 0.060131
+    },
+    "2025-12-11_22-22-24_frame_3.jpg": {
+      "Car": 3,
+      "motorcycle": 1,
+      "Car_coverage": 0.041831,
+      "motorcycle_coverage": 0.019833,
+      "total_vehicle_coverage": 0.061664
+    },
+    "2025-12-11_22-22-24_frame_4.jpg": {
+      "Car": 2,
+      "Car_coverage": 0.039727,
+      "total_vehicle_coverage": 0.039727
+    },
+    "2025-12-11_22-22-24_frame_5.jpg": {
+      "Car": 3,
+      "motorcycle": 1,
+      "Car_coverage": 0.054757,
+      "motorcycle_coverage": 0.031472,
+      "total_vehicle_coverage": 0.086229
+    },
+    "2025-12-11_22-22-24_frame_6.jpg": {
+      "Car": 3,
+      "motorcycle": 1,
+      "Car_coverage": 0.059211,
+      "motorcycle_coverage": 0.035498,
+      "total_vehicle_coverage": 0.08969
+    },
+    "2025-12-11_22-22-24_frame_7.jpg": {
+      "motorcycle": 1,
+      "Car": 2,
+      "motorcycle_coverage": 0.043008,
+      "Car_coverage": 0.008442,
+      "total_vehicle_coverage": 0.05145
+    },
+    "2025-12-11_22-22-24_frame_8.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.058916,
+      "total_vehicle_coverage": 0.058916
+    },
+    "2025-12-11_22-22-24_frame_9.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.05318,
+      "total_vehicle_coverage": 0.05318
+    },
+    "2025-12-11_22-22-24_frame_10.jpg": {
+      "Car": 3,
+      "Bicycle": 1,
+      "Car_coverage": 0.047025,
+      "Bicycle_coverage": 0.012281,
+      "total_vehicle_coverage": 0.055006
+    },
+    "2025-12-11_22-22-24_frame_11.jpg": {
+      "Car": 3,
+      "Bicycle": 1,
+      "Car_coverage": 0.034108,
+      "Bicycle_coverage": 0.012882,
+      "total_vehicle_coverage": 0.043168
+    },
+    "2025-12-11_22-22-24_frame_12.jpg": {
+      "Car": 2,
+      "Bicycle": 1,
+      "Car_coverage": 0.010788,
+      "Bicycle_coverage": 0.013808,
+      "total_vehicle_coverage": 0.024596
+    },
+    "2025-12-11_22-22-24_frame_13.jpg": {
+      "Bicycle": 1,
+      "Car": 3,
+      "Bicycle_coverage": 0.01879,
+      "Car_coverage": 0.037792,
+      "total_vehicle_coverage": 0.056582
+    },
+    "2025-12-11_22-22-24_frame_14.jpg": {
+      "Car": 3,
+      "Bicycle": 1,
+      "Car_coverage": 0.045796,
+      "Bicycle_coverage": 0.01411,
+      "total_vehicle_coverage": 0.059906
+    },
+    "2025-12-11_22-22-24_frame_15.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.054155,
+      "total_vehicle_coverage": 0.054155
+    },
+    "2025-12-11_22-22-24_frame_16.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.062852,
+      "total_vehicle_coverage": 0.062852
+    },
+    "2025-12-11_22-22-24_frame_17.jpg": {
+      "Car": 2,
+      "Car_coverage": 0.064127,
+      "total_vehicle_coverage": 0.064127
+    },
+    "2025-12-11_22-22-29_frame_0.jpg": {
+      "Car": 1,
+      "Car_coverage": 0.056064,
+      "total_vehicle_coverage": 0.056064
+    },
+    "2025-12-11_22-22-29_frame_1.jpg": {
+      "Car": 1,
+      "Car_coverage": 0.056607,
+      "total_vehicle_coverage": 0.056607
+    },
+    "2025-12-11_22-22-29_frame_2.jpg": {
+      "Car": 1,
+      "Car_coverage": 0.055075,
+      "total_vehicle_coverage": 0.055075
+    },
+    "2025-12-11_22-22-29_frame_3.jpg": {
+      "Car": 2,
+      "Car_coverage": 0.062208,
+      "total_vehicle_coverage": 0.062208
+    },
+    "2025-12-11_22-22-29_frame_4.jpg": {
+      "Car": 2,
+      "Car_coverage": 0.073444,
+      "total_vehicle_coverage": 0.073444
+    },
+    "2025-12-11_22-22-29_frame_5.jpg": {
+      "Car": 2,
+      "Bicycle": 1,
+      "Car_coverage": 0.06806,
+      "Bicycle_coverage": 0.005081,
+      "total_vehicle_coverage": 0.072251
+    },
+    "2025-12-11_22-22-29_frame_6.jpg": {
+      "Car": 3,
+      "Car_coverage": 0.082217,
+      "total_vehicle_coverage": 0.082217
+    },
+    "2025-12-11_22-22-29_frame_7.jpg": {
+      "Car": 2,
+      "Car_coverage": 0.048944,
+      "total_vehicle_coverage": 0.048944
+    },
+    "2025-12-11_22-22-29_frame_8.jpg": {
+      "Car": 2,
+      "motorcycle": 1,
+      "Car_coverage": 0.051016,
+      "motorcycle_coverage": 0.1519,
+      "total_vehicle_coverage": 0.202916
+    },
+    "2025-12-11_22-22-29_frame_9.jpg": {
+      "Car": 1,
+      "motorcycle": 1,
+      "Car_coverage": 0.025145,
+      "motorcycle_coverage": 0.092337,
+      "total_vehicle_coverage": 0.117482
+    },
+    "2025-12-11_22-22-29_frame_10.jpg": {
+      "Car": 1,
+      "Car_coverage": 0.024767,
+      "total_vehicle_coverage": 0.024767
+    },
+    "2025-12-11_22-22-29_frame_11.jpg": {
+      "Car": 2,
+      "motorcycle": 1,
+      "Car_coverage": 0.060486,
+      "motorcycle_coverage": 0.027671,
+      "total_vehicle_coverage": 0.088157
+    },
+    "2025-12-11_22-22-29_frame_12.jpg": {
+      "Car": 2,
+      "motorcycle": 1,
+      "Car_coverage": 0.075524,
+      "motorcycle_coverage": 0.020311,
+      "total_vehicle_coverage": 0.095835
+    },
+    "2025-12-11_22-22-29_frame_13.jpg": {
+      "Car": 2,
+      "motorcycle": 2,
+      "Car_coverage": 0.073548,
+      "motorcycle_coverage": 0.021341,
+      "total_vehicle_coverage": 0.094889
+    },
+    "2025-12-11_22-22-29_frame_14.jpg": {
+      "Car": 1,
+      "motorcycle": 2,
+      "Car_coverage": 0.016954,
+      "motorcycle_coverage": 0.020757,
+      "total_vehicle_coverage": 0.03771
+    },
+    "2025-12-11_22-22-29_frame_15.jpg": {
+      "Car": 2,
+      "motorcycle": 2,
+      "Car_coverage": 0.070813,
+      "motorcycle_coverage": 0.019816,
+      "total_vehicle_coverage": 0.090629
+    },
+    "2025-12-11_22-22-29_frame_16.jpg": {
+      "Car": 2,
+      "motorcycle": 2,
+      "Car_coverage": 0.050662,
+      "motorcycle_coverage": 0.025683,
+      "total_vehicle_coverage": 0.076345
+    }
   }
 }
