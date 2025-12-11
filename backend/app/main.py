@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routers import upload, process, dashboard
+from app.routers import upload, process, dashboard, air_quality
 from app.core.config import OUTPUT_DIR
 import time
 
@@ -29,6 +29,7 @@ app.add_middleware(
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
 app.include_router(process.router, prefix="/api", tags=["Process"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
+app.include_router(air_quality.router, prefix="/api", tags=["Air Quality"])
 
 # Also mount without /api prefix for backwards compatibility
 app.include_router(upload.router, tags=["Upload (no prefix)"])
