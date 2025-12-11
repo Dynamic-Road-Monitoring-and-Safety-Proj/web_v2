@@ -6,8 +6,8 @@ import { motion } from "framer-motion";
 import { Activity, Loader2, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Toggle } from "@/components/ui/toggle";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 interface AirQualityData {
   "PM1.0(µg/m³)": number;
@@ -27,15 +27,16 @@ interface MeterConfig {
   label: string;
   unit: string;
   max: number;
+  color: string;
 }
 
 const meterConfigs: MeterConfig[] = [
-  { key: "PM1.0(µg/m³)", label: "PM1.0", unit: "µg/m³", max: 200 },
-  { key: "PM2.5(µg/m³)", label: "PM2.5", unit: "µg/m³", max: 200 },
-  { key: "PM10(µg/m³)", label: "PM10", unit: "µg/m³", max: 200 },
-  { key: "CO2(ppm)", label: "CO2", unit: "ppm", max: 2000 },
-  { key: "CH2O(mg/m³)", label: "CH2O", unit: "mg/m³", max: 1 },
-  { key: "NO2(ppm)", label: "NO2", unit: "ppm", max: 1 },
+  { key: "PM1.0(µg/m³)", label: "PM1.0", unit: "µg/m³", max: 200, color: "#ef4444" },
+  { key: "PM2.5(µg/m³)", label: "PM2.5", unit: "µg/m³", max: 200, color: "#f97316" },
+  { key: "PM10(µg/m³)", label: "PM10", unit: "µg/m³", max: 200, color: "#eab308" },
+  { key: "CO2(ppm)", label: "CO2", unit: "ppm", max: 2000, color: "#22c55e" },
+  { key: "CH2O(mg/m³)", label: "CH2O", unit: "mg/m³", max: 1, color: "#3b82f6" },
+  { key: "NO2(ppm)", label: "NO2", unit: "ppm", max: 1, color: "#8b5cf6" },
 ];
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -52,17 +53,28 @@ const formatValue = (value: number, key: string): string => {
 
 interface HistoricalDataPoint {
   timestamp: string;
-  value: number;
+  [key: string]: string | number;
 }
 
-const ApiPage = () => {
+const AqiPage = () => {
   const [airQualityData, setAirQualityData] = useState<AirQualityData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [selectedMetric, setSelectedMetric] = useState<string>(meterConfigs[0].key);
-  const [historicalData, setHistoricalData] = useState<Record<string, HistoricalDataPoint[]>>({});
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([meterConfigs[0].key]);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
   const MAX_DATA_POINTS = 30; // Store last 30 data points
+
+  const toggleMetric = (metricKey: string) => {
+    setSelectedMetrics((prev) => {
+      if (prev.includes(metricKey)) {
+        // Don't allow deselecting if it's the last one
+        if (prev.length === 1) return prev;
+        return prev.filter((k) => k !== metricKey);
+      }
+      return [...prev, metricKey];
+    });
+  };
 
   const fetchAirQuality = async () => {
     try {
@@ -91,21 +103,16 @@ const ApiPage = () => {
       const now = new Date();
       const timeString = now.toLocaleTimeString();
       
-      // Update historical data for all metrics
+      // Update historical data with all metrics in a single data point
       setHistoricalData((prev) => {
-        const updated = { ...prev };
+        const newDataPoint: HistoricalDataPoint = { timestamp: timeString };
         
         meterConfigs.forEach((config) => {
-          const value = data[config.key] || 0;
-          const existingData = updated[config.key] || [];
-          const newDataPoint = { timestamp: timeString, value };
-          
-          // Add new data point and keep only last MAX_DATA_POINTS
-          const newData = [...existingData, newDataPoint].slice(-MAX_DATA_POINTS);
-          updated[config.key] = newData;
+          newDataPoint[config.key] = data[config.key] || 0;
         });
         
-        return updated;
+        // Add new data point and keep only last MAX_DATA_POINTS
+        return [...prev, newDataPoint].slice(-MAX_DATA_POINTS);
       });
       
       setLastUpdated(now);
@@ -254,7 +261,7 @@ const ApiPage = () => {
           )}
 
           {/* Time Series Graph */}
-          {airQualityData && historicalData[selectedMetric]?.length > 0 && (
+          {airQualityData && historicalData.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -263,30 +270,39 @@ const ApiPage = () => {
             >
               <Card className="glass-card">
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-4">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-5 w-5 text-primary" />
                       <CardTitle>Time Series Data</CardTitle>
                     </div>
-                    <Select value={selectedMetric} onValueChange={setSelectedMetric}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Select metric" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {meterConfigs.map((config) => (
-                          <SelectItem key={config.key} value={config.key}>
-                            {config.label} ({config.unit})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex flex-wrap gap-2">
+                      {meterConfigs.map((config) => (
+                        <Toggle
+                          key={config.key}
+                          pressed={selectedMetrics.includes(config.key)}
+                          onPressedChange={() => toggleMetric(config.key)}
+                          variant="outline"
+                          size="sm"
+                          className="data-[state=on]:bg-primary/20 data-[state=on]:border-primary gap-2"
+                          style={{
+                            borderColor: selectedMetrics.includes(config.key) ? config.color : undefined,
+                          }}
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: config.color }}
+                          />
+                          {config.label}
+                        </Toggle>
+                      ))}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
-                        data={historicalData[selectedMetric] || []}
+                        data={historicalData}
                         margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -296,7 +312,7 @@ const ApiPage = () => {
                           tick={{ fill: "hsl(var(--muted-foreground))" }}
                           tickFormatter={(value) => {
                             // Show only every 5th tick to avoid overcrowding
-                            const index = historicalData[selectedMetric]?.findIndex(
+                            const index = historicalData.findIndex(
                               (d) => d.timestamp === value
                             );
                             return index % 5 === 0 ? value : "";
@@ -305,12 +321,6 @@ const ApiPage = () => {
                         <YAxis
                           className="text-xs"
                           tick={{ fill: "hsl(var(--muted-foreground))" }}
-                          label={{
-                            value: meterConfigs.find((c) => c.key === selectedMetric)?.unit || "",
-                            angle: -90,
-                            position: "insideLeft",
-                            style: { fill: "hsl(var(--muted-foreground))" },
-                          }}
                         />
                         <Tooltip
                           contentStyle={{
@@ -319,22 +329,37 @@ const ApiPage = () => {
                             borderRadius: "8px",
                           }}
                           labelStyle={{ color: "hsl(var(--foreground))" }}
-                          formatter={(value: number) => formatValue(value, selectedMetric)}
+                          formatter={(value: number, name: string) => {
+                            const config = meterConfigs.find((c) => c.key === name);
+                            return [formatValue(value, name), config?.label || name];
+                          }}
                         />
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={2}
-                          dot={false}
-                          name={meterConfigs.find((c) => c.key === selectedMetric)?.label}
-                          animationDuration={300}
+                        <Legend
+                          formatter={(value) => {
+                            const config = meterConfigs.find((c) => c.key === value);
+                            return config ? `${config.label} (${config.unit})` : value;
+                          }}
                         />
+                        {selectedMetrics.map((metricKey) => {
+                          const config = meterConfigs.find((c) => c.key === metricKey);
+                          return (
+                            <Line
+                              key={metricKey}
+                              type="monotone"
+                              dataKey={metricKey}
+                              stroke={config?.color || "hsl(var(--primary))"}
+                              strokeWidth={2}
+                              dot={false}
+                              name={metricKey}
+                              animationDuration={300}
+                            />
+                          );
+                        })}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
                   <div className="mt-4 text-sm text-muted-foreground text-center">
-                    Showing last {historicalData[selectedMetric]?.length || 0} data points
+                    Showing last {historicalData.length} data points • {selectedMetrics.length} metric{selectedMetrics.length > 1 ? 's' : ''} selected
                   </div>
                 </CardContent>
               </Card>
@@ -346,4 +371,4 @@ const ApiPage = () => {
   );
 };
 
-export default ApiPage;
+export default AqiPage;

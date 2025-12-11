@@ -5,13 +5,13 @@ export const CustomCursor = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const [isClicking, setIsClicking] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
     // Check for reduced motion preference
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const handleMotionChange = (e: MediaQueryListEvent | MediaQueryList) => {
-      setIsVisible(!e.matches);
+      setReducedMotion(e.matches);
     };
     
     handleMotionChange(mediaQuery);
@@ -39,12 +39,10 @@ export const CustomCursor = () => {
     const handleMouseDown = () => setIsClicking(true);
     const handleMouseUp = () => setIsClicking(false);
 
-    if (isVisible) {
-      window.addEventListener("mousemove", updateMousePosition);
-      window.addEventListener("mouseover", handleMouseOver);
-      window.addEventListener("mousedown", handleMouseDown);
-      window.addEventListener("mouseup", handleMouseUp);
-    }
+    window.addEventListener("mousemove", updateMousePosition);
+    window.addEventListener("mouseover", handleMouseOver);
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
 
     return () => {
       mediaQuery.removeEventListener("change", handleMotionChange);
@@ -53,9 +51,19 @@ export const CustomCursor = () => {
       window.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isVisible]);
+  }, []);
 
-  if (!isVisible) return null;
+  // Simplified cursor for reduced motion - no animations, just follows mouse
+  if (reducedMotion) {
+    return (
+      <div
+        className="fixed top-0 left-0 w-4 h-4 bg-primary rounded-full pointer-events-none z-[9999] mix-blend-difference"
+        style={{
+          transform: `translate(${mousePosition.x - 8}px, ${mousePosition.y - 8}px)`,
+        }}
+      />
+    );
+  }
 
   return (
     <>

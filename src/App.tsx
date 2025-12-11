@@ -8,7 +8,7 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
-import Api from "./pages/Api";
+import Aqi from "./pages/Aqi";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 
@@ -26,7 +26,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/api" element={<Api />} />
+          <Route path="/aqi" element={<Aqi />} />
           <Route path="/about" element={<About />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
