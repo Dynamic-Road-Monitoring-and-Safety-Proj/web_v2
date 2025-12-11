@@ -38,7 +38,7 @@ export const Navigation = () => {
     { label: "Dashboard", href: "/dashboard" },
     { label: "Alerts", href: "/alerts" },
     { label: "Reports", href: "/reports" },
-    { label: "AQI", href: "/api" },
+    { label: "AQI", href: "/aqi" },
     { label: "About", href: "/about" },
   ];
 
