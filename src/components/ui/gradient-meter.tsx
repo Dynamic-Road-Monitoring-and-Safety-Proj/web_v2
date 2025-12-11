@@ -79,6 +79,7 @@ interface SemiCircleMeterProps {
   label?: string;
   size?: number;
   className?: string;
+  decimalPlaces?: number;
 }
 
 export const SemiCircleMeter = ({
@@ -87,6 +88,7 @@ export const SemiCircleMeter = ({
   label,
   size = 200,
   className,
+  decimalPlaces = 1,
 }: SemiCircleMeterProps) => {
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
   const angle = (percentage / 100) * 180;
@@ -107,13 +109,17 @@ export const SemiCircleMeter = ({
   const radius = size / 2 - 20;
   const circumference = Math.PI * radius;
   const strokeDashoffset = circumference - (angle / 180) * circumference;
+  
+  // Calculate exact center of the semicircle arc
+  const centerX = size / 2;
+  const centerY = size / 2;
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
       <svg width={size} height={size / 2 + 30} className="overflow-visible">
         {/* Background arc */}
         <path
-          d={`M ${20} ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 20} ${size / 2}`}
+          d={`M ${20} ${centerY} A ${radius} ${radius} 0 0 1 ${size - 20} ${centerY}`}
           fill="none"
           stroke="currentColor"
           strokeWidth={12}
@@ -131,7 +137,7 @@ export const SemiCircleMeter = ({
         
         {/* Progress arc */}
         <motion.path
-          d={`M ${20} ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 20} ${size / 2}`}
+          d={`M ${20} ${centerY} A ${radius} ${radius} 0 0 1 ${size - 20} ${centerY}`}
           fill="none"
           stroke="url(#meterGradient)"
           strokeWidth={12}
@@ -142,25 +148,6 @@ export const SemiCircleMeter = ({
           transition={{ duration: 1.5, ease: "easeOut" }}
         />
         
-        {/* Needle */}
-        <motion.g
-          initial={{ rotate: -90 }}
-          animate={{ rotate: angle - 90 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          style={{ transformOrigin: `${size / 2}px ${size / 2}px` }}
-        >
-          <line
-            x1={size / 2}
-            y1={size / 2}
-            x2={size / 2}
-            y2={30}
-            stroke={getColor()}
-            strokeWidth={3}
-            strokeLinecap="round"
-          />
-          <circle cx={size / 2} cy={size / 2} r={8} fill={getColor()} />
-        </motion.g>
-        
         {/* Value text */}
         <text
           x={size / 2}
@@ -168,7 +155,7 @@ export const SemiCircleMeter = ({
           textAnchor="middle"
           className="text-3xl font-bold fill-current"
         >
-          {value.toFixed(1)}
+          {value.toFixed(decimalPlaces)}
         </text>
       </svg>
       
