@@ -6,8 +6,10 @@ import { motion } from "framer-motion";
 import { Activity, Loader2, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Toggle } from "@/components/ui/toggle";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { ChevronDown } from "lucide-react";
 
 interface AirQualityData {
   "PM1.0(µg/m³)": number;
@@ -270,32 +272,45 @@ const AqiPage = () => {
             >
               <Card className="glass-card">
                 <CardHeader>
-                  <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-5 w-5 text-primary" />
                       <CardTitle>Time Series Data</CardTitle>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {meterConfigs.map((config) => (
-                        <Toggle
-                          key={config.key}
-                          pressed={selectedMetrics.includes(config.key)}
-                          onPressedChange={() => toggleMetric(config.key)}
-                          variant="outline"
-                          size="sm"
-                          className="data-[state=on]:bg-primary/20 data-[state=on]:border-primary gap-2"
-                          style={{
-                            borderColor: selectedMetrics.includes(config.key) ? config.color : undefined,
-                          }}
-                        >
-                          <span
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: config.color }}
-                          />
-                          {config.label}
-                        </Toggle>
-                      ))}
-                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-[220px] justify-between">
+                          <span className="truncate">
+                            {selectedMetrics.length === 1 
+                              ? meterConfigs.find(c => c.key === selectedMetrics[0])?.label 
+                              : `${selectedMetrics.length} metrics selected`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[220px] p-2" align="end">
+                        <div className="flex flex-col gap-1">
+                          {meterConfigs.map((config) => (
+                            <label
+                              key={config.key}
+                              className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={selectedMetrics.includes(config.key)}
+                                onCheckedChange={() => toggleMetric(config.key)}
+                              />
+                              <span
+                                className="w-3 h-3 rounded-full shrink-0"
+                                style={{ backgroundColor: config.color }}
+                              />
+                              <span className="text-sm">
+                                {config.label} ({config.unit})
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </CardHeader>
                 <CardContent>
