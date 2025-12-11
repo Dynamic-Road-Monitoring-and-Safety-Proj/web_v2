@@ -67,10 +67,21 @@ const ApiPage = () => {
   const fetchAirQuality = async () => {
     try {
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/air-quality/latest`);
+      const response = await fetch(`${API_BASE_URL}/api/air-quality/latest`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Backend returned non-JSON response. Make sure backend is running on ${API_BASE_URL}`);
       }
       
       const data = await response.json();
@@ -137,7 +148,7 @@ const ApiPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20" style={{ cursor: 'auto' }}>
       <Navigation />
       
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8">
