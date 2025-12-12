@@ -47,7 +47,8 @@ class RawUpload(Base):
     video_duration_seconds = Column(Integer, nullable=True)
     
     # Additional metadata (flexible JSON storage)
-    metadata = Column(JSONB, nullable=True)
+    # Note: 'metadata' is reserved in SQLAlchemy, using 'extra_data' instead
+    extra_data = Column(JSONB, nullable=True)
     
     # Relationship to events
     events = relationship("Event", back_populates="upload", lazy="dynamic")
@@ -172,7 +173,7 @@ CREATE TABLE IF NOT EXISTS raw_uploads (
     gyro_max DOUBLE PRECISION,
     gyro_avg DOUBLE PRECISION,
     video_duration_seconds INTEGER,
-    metadata JSONB
+    extra_data JSONB
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_uploads_status ON raw_uploads(processing_status);

@@ -165,12 +165,13 @@ export interface SummaryStats {
 
 /**
  * Fetch tiles within a map viewport for heatmap rendering.
+ * Uses mock endpoint for demo data.
  */
 export const fetchTilesInViewport = async (bounds: ViewportBounds): Promise<TileData[]> => {
   try {
     const { minLat, maxLat, minLon, maxLon } = bounds;
     const response = await fetch(
-      `${API_BASE_URL}/tiles?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`,
+      `${API_BASE_URL}/tiles-mock?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`,
       {
         headers: {
           "ngrok-skip-browser-warning": "true",
@@ -194,7 +195,7 @@ export const fetchTilesInViewport = async (bounds: ViewportBounds): Promise<Tile
  */
 export const fetchAllTiles = async (limit: number = 1000): Promise<TileData[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/tiles/all?limit=${limit}`, {
+    const response = await fetch(`${API_BASE_URL}/tiles-mock/all?limit=${limit}`, {
       headers: {
         "ngrok-skip-browser-warning": "true",
       },
@@ -242,6 +243,7 @@ export const fetchNearbyTiles = async (
 
 /**
  * Fetch events for a specific tile (for detail view).
+ * Uses mock endpoint for demo data.
  */
 export const fetchTileEvents = async (
   tileId: string,
@@ -249,7 +251,7 @@ export const fetchTileEvents = async (
   eventType?: string
 ): Promise<TileEvent[]> => {
   try {
-    let url = `${API_BASE_URL}/tiles/${tileId}/events?limit=${limit}`;
+    let url = `${API_BASE_URL}/tiles-mock/${tileId}/events?limit=${limit}`;
     if (eventType) {
       url += `&event_type=${eventType}`;
     }

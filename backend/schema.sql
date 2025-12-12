@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS raw_uploads (
     gyro_max DOUBLE PRECISION,
     gyro_avg DOUBLE PRECISION,
     video_duration_seconds INTEGER,
-    metadata JSONB
+    extra_data JSONB
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_uploads_status ON raw_uploads(processing_status);

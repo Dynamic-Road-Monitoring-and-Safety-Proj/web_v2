@@ -60,11 +60,11 @@ async def register_upload(
             INSERT INTO raw_uploads (
                 upload_id, device_id, s3_key_video, s3_key_csv,
                 avg_lat, avg_lon, avg_velocity, video_duration_seconds,
-                metadata, processing_status, uploaded_at
+                extra_data, processing_status, uploaded_at
             ) VALUES (
                 :upload_id, :device_id, :s3_key_video, :s3_key_csv,
                 :avg_lat, :avg_lon, :avg_velocity, :video_duration_seconds,
-                :metadata, 'pending', NOW()
+                :extra_data, 'pending', NOW()
             )
         """),
         {
@@ -76,7 +76,7 @@ async def register_upload(
             'avg_lon': upload.avg_lon,
             'avg_velocity': upload.avg_velocity,
             'video_duration_seconds': upload.video_duration_seconds,
-            'metadata': upload.metadata
+            'extra_data': upload.metadata
         }
     )
     await db.commit()

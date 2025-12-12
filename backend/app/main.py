@@ -6,7 +6,7 @@ import time
 import os
 
 from app.routers import upload, process, dashboard, air_quality
-from app.routers import tiles, events, uploads_s3
+from app.routers.tiles_mock import router as tiles_mock_router
 from app.core.config import OUTPUT_DIR
 
 # Database initialization flag
@@ -68,10 +68,15 @@ app.include_router(process.router, prefix="/api", tags=["Process"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 app.include_router(air_quality.router, prefix="/api", tags=["Air Quality"])
 
-# New tile-based API routers (PostgreSQL)
-app.include_router(tiles.router, prefix="/api", tags=["Tiles"])
-app.include_router(events.router, prefix="/api", tags=["Events"])
-app.include_router(uploads_s3.router, prefix="/api", tags=["Uploads S3"])
+# Mock tiles router (works without PostgreSQL) - for heatmap
+app.include_router(tiles_mock_router, prefix="/api", tags=["Tiles Mock"])
+
+# PostgreSQL-based routers (only if USE_POSTGRES=true)
+if USE_POSTGRES:
+    from app.routers import tiles, events, uploads_s3
+    app.include_router(tiles.router, prefix="/api", tags=["Tiles"])
+    app.include_router(events.router, prefix="/api", tags=["Events"])
+    app.include_router(uploads_s3.router, prefix="/api", tags=["Uploads S3"])
 
 # Also mount without /api prefix for backwards compatibility
 app.include_router(upload.router, tags=["Upload (no prefix)"])

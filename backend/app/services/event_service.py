@@ -223,7 +223,7 @@ async def mark_upload_failed(upload_id: str, error_message: str, db: AsyncSessio
         text("""
             UPDATE raw_uploads 
             SET processing_status = 'failed', 
-                metadata = COALESCE(metadata, '{}') || jsonb_build_object('error', :error)
+                extra_data = COALESCE(extra_data, '{}') || jsonb_build_object('error', :error)
             WHERE upload_id = :upload_id
         """),
         {'upload_id': upload_id, 'error': error_message}
