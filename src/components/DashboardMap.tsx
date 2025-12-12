@@ -94,6 +94,78 @@ function HeatmapLayer({ tiles }: { tiles: TileData[] }) {
   );
 }
 
+// Traffic layer showing congestion based on event density
+function TrafficLayer({ events }: { events: Event[] }) {
+  // Group events by rough location (0.008 degree ~= 0.8km grid)
+  const trafficData = useMemo(() => {
+    const grid: { [key: string]: { lat: number; lon: number; count: number; avgVehicles: number } } = {};
+    
+    events.forEach(event => {
+      const gridLat = Math.floor(event.lat_center / 0.008) * 0.008;
+      const gridLon = Math.floor(event.lon_center / 0.008) * 0.008;
+      const key = `${gridLat}_${gridLon}`;
+      
+      if (!grid[key]) {
+        grid[key] = { lat: gridLat + 0.004, lon: gridLon + 0.004, count: 0, avgVehicles: 0 };
+      }
+      grid[key].count++;
+      grid[key].avgVehicles += event.avg_vehicles_per_frame || 0;
+    });
+    
+    // Calculate average vehicles
+    Object.values(grid).forEach(cell => {
+      cell.avgVehicles = cell.avgVehicles / cell.count;
+    });
+    
+    return Object.values(grid);
+  }, [events]);
+
+  const getTrafficColor = (avgVehicles: number) => {
+    if (avgVehicles < 5) return '#22c55e'; // Green - light traffic
+    if (avgVehicles < 10) return '#eab308'; // Yellow - moderate
+    return '#ef4444'; // Red - heavy traffic
+  };
+
+  return (
+    <>
+      {trafficData.map((cell, idx) => {
+        const bounds: [[number, number], [number, number]] = [
+          [cell.lat - 0.004, cell.lon - 0.004],
+          [cell.lat + 0.004, cell.lon + 0.004]
+        ];
+        
+        const color = getTrafficColor(cell.avgVehicles);
+        const opacity = Math.min(0.3 + (cell.avgVehicles / 20) * 0.4, 0.7);
+
+        return (
+          <Rectangle
+            key={`traffic_${idx}`}
+            bounds={bounds}
+            pathOptions={{
+              color: color,
+              fillColor: color,
+              fillOpacity: opacity,
+              weight: 1,
+              opacity: 0.6
+            }}
+          >
+            <Popup>
+              <div className="min-w-[150px] p-1">
+                <div className="font-bold text-sm mb-2">Traffic Zone</div>
+                <div className="text-xs space-y-1">
+                  <div>🚗 Avg Vehicles: <strong>{cell.avgVehicles.toFixed(1)}</strong></div>
+                  <div>📍 Events: <strong>{cell.count}</strong></div>
+                  <div>📊 Density: <strong>{cell.avgVehicles < 5 ? 'Light' : cell.avgVehicles < 10 ? 'Moderate' : 'Heavy'}</strong></div>
+                </div>
+              </div>
+            </Popup>
+          </Rectangle>
+        );
+      })}
+    </>
+  );
+}
+
 function BoundsWatcher({ onBoundsChange }: { onBoundsChange: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => void }) {
   const map = useMapEvents({
     moveend: () => {
@@ -130,7 +202,7 @@ function BoundsWatcher({ onBoundsChange }: { onBoundsChange: (bounds: { minLat: 
   return null;
 }
 
-export function DashboardMap({ events, selectedEvent, onEventSelect, showHeatmap = false }: DashboardMapProps) {
+export function DashboardMap({ events, selectedEvent, onEventSelect, showHeatmap = false, showTraffic = false }: DashboardMapProps) {
   const defaultCenter: [number, number] = [30.7333, 76.7794]; // Chandigarh
   const [tiles, setTiles] = useState<TileData[]>([]);
   const [loadingTiles, setLoadingTiles] = useState(false);
@@ -160,6 +232,9 @@ export function DashboardMap({ events, selectedEvent, onEventSelect, showHeatmap
     }
   }, [showHeatmap]);
 
+  // Show events view by default (not heatmap, not traffic)
+  const showEvents = !showHeatmap && !showTraffic;
+
   return (
     <div className="h-full w-full relative z-0">
       {loadingTiles && showHeatmap && (
@@ -186,9 +261,14 @@ export function DashboardMap({ events, selectedEvent, onEventSelect, showHeatmap
             <HeatmapLayer tiles={tiles} />
           </>
         )}
+
+        {/* Traffic Layer */}
+        {showTraffic && (
+          <TrafficLayer events={events} />
+        )}
         
-        {/* Event Markers (show when heatmap is off) */}
-        {!showHeatmap && events.map((event) => (
+        {/* Event Markers (show when in events mode) */}
+        {showEvents && events.map((event) => (
           <CircleMarker
             key={event.id}
             center={[event.lat_center, event.lon_center]}
