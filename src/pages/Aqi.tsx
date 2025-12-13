@@ -41,7 +41,9 @@ const meterConfigs: MeterConfig[] = [
   { key: "NO2(ppm)", label: "NO2", unit: "ppm", max: 1, color: "#8b5cf6" },
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Lambda API endpoint from environment variable
+// Set in .env: VITE_LAMBDA_API_URL=https://your-api-id.execute-api.region.amazonaws.com/dev
+const LAMBDA_API_URL = import.meta.env.VITE_LAMBDA_API_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // Helper function to format values with appropriate decimal places
 const formatValue = (value: number, key: string): string => {
@@ -81,11 +83,10 @@ const AqiPage = () => {
   const fetchAirQuality = async () => {
     try {
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/air-quality/latest`, {
+      const response = await fetch(`${LAMBDA_API_URL}/air-quality/latest`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         },
       });
       
@@ -96,7 +97,7 @@ const AqiPage = () => {
       // Check if response is actually JSON
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
-        throw new Error(`Backend returned non-JSON response. Make sure backend is running on ${API_BASE_URL}`);
+        throw new Error(`Lambda returned non-JSON response. Make sure Lambda is deployed and VITE_LAMBDA_API_URL is set correctly`);
       }
       
       const data = await response.json();
@@ -131,7 +132,7 @@ const AqiPage = () => {
     fetchAirQuality();
 
     // Set up interval to fetch every 1 second
-    const interval = setInterval(fetchAirQuality, 1000);
+    const interval = setInterval(fetchAirQuality, 10000);
 
     return () => clearInterval(interval);
   }, []);
@@ -201,7 +202,7 @@ const AqiPage = () => {
               <Alert variant="destructive" className="mt-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  {error}. Make sure the backend server is running.
+                  {error}. Make sure Lambda is deployed and VITE_LAMBDA_API_URL is configured.
                 </AlertDescription>
               </Alert>
             )}

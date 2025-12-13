@@ -3,12 +3,15 @@ from fastapi.responses import JSONResponse
 import httpx
 from typing import Dict, Any
 import logging
+from dotenv import load_dotenv
+import os
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 # Google Sheets API configuration
-GOOGLE_SHEETS_API_KEY = "AIzaSyABfFZFkY8fQlLQPpHzThk4n2x28PArB1A"
+GOOGLE_SHEETS_API_KEY = os.getenv("GOOGLE_SHEETS_API_KEY")
 SPREADSHEET_ID = "1ZlVrz7iyYq49FW3HxK0lgHsuxpbRP8Eq_9X2FqRVlaI"
 RANGE = "Sheet1!A:Z"  # Fetch all columns
 
