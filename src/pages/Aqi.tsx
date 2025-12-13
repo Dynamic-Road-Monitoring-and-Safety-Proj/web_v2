@@ -18,9 +18,6 @@ interface AirQualityData {
   "CO2(ppm)": number;
   "CH2O(mg/m³)": number;
   "NO2(ppm)": number;
-  "TVOC(grade)": number;
-  "Temperature(°C)": number;
-  "Humidity(%RH)": number;
   [key: string]: any;
 }
 
@@ -32,7 +29,7 @@ interface MeterConfig {
   color: string;
 }
 
-const meterConfigs: MeterConfig[] = [
+const METER_CONFIGS: MeterConfig[] = [
   { key: "PM1.0(µg/m³)", label: "PM1.0", unit: "µg/m³", max: 200, color: "#ef4444" },
   { key: "PM2.5(µg/m³)", label: "PM2.5", unit: "µg/m³", max: 200, color: "#f97316" },
   { key: "PM10(µg/m³)", label: "PM10", unit: "µg/m³", max: 200, color: "#eab308" },
@@ -41,345 +38,234 @@ const meterConfigs: MeterConfig[] = [
   { key: "NO2(ppm)", label: "NO2", unit: "ppm", max: 1, color: "#8b5cf6" },
 ];
 
-// Lambda API endpoint from environment variable
-// Set in .env: VITE_LAMBDA_API_URL=https://your-api-id.execute-api.region.amazonaws.com/dev
-const LAMBDA_API_URL = import.meta.env.VITE_LAMBDA_API_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
+const LAMBDA_URL = import.meta.env.VITE_LAMBDA_API_URL;
+const MAX_DATA_POINTS = 30;
 
-// Helper function to format values with appropriate decimal places
 const formatValue = (value: number, key: string): string => {
-  // For CH2O and NO2, use 4 decimal places as they're in 0.0x range
-  if (key === "CH2O(mg/m³)" || key === "NO2(ppm)") {
-    return value.toFixed(4);
-  }
-  // For PM and CO2 metrics, use 3 decimal places for better precision
-  return value.toFixed(3);
+  const decimals = key === "CH2O(mg/m³)" || key === "NO2(ppm)" ? 4 : 3;
+  return value.toFixed(decimals);
 };
 
-interface HistoricalDataPoint {
+interface HistoricalPoint {
   timestamp: string;
   [key: string]: string | number;
 }
 
 const AqiPage = () => {
-  const [airQualityData, setAirQualityData] = useState<AirQualityData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<AirQualityData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([meterConfigs[0].key]);
-  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
-  const MAX_DATA_POINTS = 30; // Store last 30 data points
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([METER_CONFIGS[0].key]);
+  const [history, setHistory] = useState<HistoricalPoint[]>([]);
 
-  const toggleMetric = (metricKey: string) => {
-    setSelectedMetrics((prev) => {
-      if (prev.includes(metricKey)) {
-        // Don't allow deselecting if it's the last one
-        if (prev.length === 1) return prev;
-        return prev.filter((k) => k !== metricKey);
-      }
-      return [...prev, metricKey];
-    });
+  const toggleMetric = (key: string) => {
+    setSelectedMetrics((prev) =>
+      prev.includes(key) && prev.length > 1 ? prev.filter((k) => k !== key) : [...prev, key]
+    );
   };
 
-  const fetchAirQuality = async () => {
+  const fetchData = async () => {
     try {
       setError(null);
-      const response = await fetch(`${LAMBDA_API_URL}/air-quality/latest`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      // Check if response is actually JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error(`Lambda returned non-JSON response. Make sure Lambda is deployed and VITE_LAMBDA_API_URL is set correctly`);
-      }
-      
-      const data = await response.json();
-      setAirQualityData(data);
-      
-      const now = new Date();
-      const timeString = now.toLocaleTimeString();
-      
-      // Update historical data with all metrics in a single data point
-      setHistoricalData((prev) => {
-        const newDataPoint: HistoricalDataPoint = { timestamp: timeString };
-        
-        meterConfigs.forEach((config) => {
-          newDataPoint[config.key] = data[config.key] || 0;
+      const response = await fetch(`${LAMBDA_URL}/air-quality/latest`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await response.json();
+      setData(json);
+      const time = new Date().toLocaleTimeString();
+      setHistory((prev) => {
+        const point: HistoricalPoint = { timestamp: time };
+        METER_CONFIGS.forEach((cfg) => {
+          point[cfg.key] = json[cfg.key] || 0;
         });
-        
-        // Add new data point and keep only last MAX_DATA_POINTS
-        return [...prev, newDataPoint].slice(-MAX_DATA_POINTS);
+        return [...prev, point].slice(-MAX_DATA_POINTS);
       });
-      
-      setLastUpdated(now);
-      setIsLoading(false);
+      setLastUpdated(new Date());
+      setLoading(false);
     } catch (err) {
-      console.error("Error fetching air quality data:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch data");
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Initial fetch
-    fetchAirQuality();
-
-    // Set up interval to fetch every 1 second
-    const interval = setInterval(fetchAirQuality, 10000);
-
+    if (!LAMBDA_URL) {
+      setError("VITE_LAMBDA_API_URL not configured");
+      setLoading(false);
+      return;
+    }
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.5,
-      },
-    },
-  };
+  if (!LAMBDA_URL) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
+        <Navigation />
+        <div className="pt-24 px-4 flex items-center justify-center h-96">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>VITE_LAMBDA_API_URL environment variable not set</AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20" style={{ cursor: 'auto' }}>
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
       <Navigation />
-      
+
       <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  Air Quality Index (AQI)
+                  Air Quality Index
                 </h1>
-                <p className="text-muted-foreground mt-2">
-                  Real-time air quality data from environmental sensors
-                </p>
+                <p className="text-muted-foreground mt-2">Real-time sensor data from AWS Lambda</p>
               </div>
               <div className="flex items-center gap-4">
-                {lastUpdated && (
-                  <div className="text-sm text-muted-foreground">
-                    Last updated: {lastUpdated.toLocaleTimeString()}
-                  </div>
-                )}
+                {lastUpdated && <div className="text-sm text-muted-foreground">{lastUpdated.toLocaleTimeString()}</div>}
                 <Button
-                  onClick={fetchAirQuality}
+                  onClick={fetchData}
                   variant="outline"
                   size="sm"
                   className="gap-2"
-                  disabled={isLoading}
+                  disabled={loading}
                 >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                   Refresh
                 </Button>
               </div>
             </div>
-
             {error && (
-              <Alert variant="destructive" className="mt-4">
+              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {error}. Make sure Lambda is deployed and VITE_LAMBDA_API_URL is configured.
-                </AlertDescription>
+                <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
           </motion.div>
 
-          {/* Loading State */}
-          {isLoading && !airQualityData && (
+          {loading && !data && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-                <p className="text-muted-foreground">Loading air quality data...</p>
+                <p className="text-muted-foreground">Loading...</p>
               </div>
             </div>
           )}
 
-          {/* Meters Grid */}
-          {airQualityData && (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto"
-            >
-              {meterConfigs.map((config) => {
-                const value = airQualityData[config.key] || 0;
-                // Determine decimal places for the meter display
-                const decimalPlaces = (config.key === "CH2O(mg/m³)" || config.key === "NO2(ppm)") ? 4 : 3;
-                
-                return (
-                  <motion.div key={config.key} variants={itemVariants}>
-                    <Card className="glass-card hover:shadow-glow transition-all duration-300 overflow-hidden">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <Activity className="h-5 w-5 text-primary" />
-                          {config.label}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex flex-col items-center pb-6">
-                        <SemiCircleMeter
-                          value={value}
-                          max={config.max}
-                          size={200}
-                          decimalPlaces={decimalPlaces}
-                        />
-                        <div className="mt-4 text-center">
-                          <div className="text-2xl font-bold text-foreground">
-                            {typeof value === 'number' ? formatValue(value, config.key) : value}
+          {data && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ staggerChildren: 0.1 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto"
+              >
+                {METER_CONFIGS.map((cfg) => {
+                  const val = data[cfg.key] || 0;
+                  return (
+                    <motion.div key={cfg.key} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                      <Card className="glass-card hover:shadow-glow transition-all">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <Activity className="h-5 w-5 text-primary" />
+                            {cfg.label}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex flex-col items-center">
+                          <SemiCircleMeter
+                            value={val}
+                            max={cfg.max}
+                            size={200}
+                            decimalPlaces={cfg.key === "CH2O(mg/m³)" || cfg.key === "NO2(ppm)" ? 4 : 3}
+                          />
+                          <div className="mt-4 text-center">
+                            <div className="text-2xl font-bold">{formatValue(val, cfg.key)}</div>
+                            <div className="text-sm text-muted-foreground">{cfg.unit}</div>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {config.unit}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
-          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
 
-          {/* Time Series Graph */}
-          {airQualityData && historicalData.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="mt-12"
-            >
-              <Card className="glass-card">
-                <CardHeader>
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-primary" />
-                      <CardTitle>Time Series Data</CardTitle>
-                    </div>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-[220px] justify-between">
-                          <span className="truncate">
-                            {selectedMetrics.length === 1 
-                              ? meterConfigs.find(c => c.key === selectedMetrics[0])?.label 
-                              : `${selectedMetrics.length} metrics selected`}
-                          </span>
-                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[220px] p-2" align="end">
-                        <div className="flex flex-col gap-1">
-                          {meterConfigs.map((config) => (
-                            <label
-                              key={config.key}
-                              className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer"
-                            >
-                              <Checkbox
-                                checked={selectedMetrics.includes(config.key)}
-                                onCheckedChange={() => toggleMetric(config.key)}
-                              />
-                              <span
-                                className="w-3 h-3 rounded-full shrink-0"
-                                style={{ backgroundColor: config.color }}
-                              />
-                              <span className="text-sm">
-                                {config.label} ({config.unit})
-                              </span>
-                            </label>
-                          ))}
+              {history.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-12">
+                  <Card className="glass-card">
+                    <CardHeader>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-5 w-5 text-primary" />
+                          <CardTitle>Time Series</CardTitle>
                         </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[400px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={historicalData}
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis
-                          dataKey="timestamp"
-                          className="text-xs"
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                          tickFormatter={(value) => {
-                            // Show only every 5th tick to avoid overcrowding
-                            const index = historicalData.findIndex(
-                              (d) => d.timestamp === value
-                            );
-                            return index % 5 === 0 ? value : "";
-                          }}
-                        />
-                        <YAxis
-                          className="text-xs"
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--popover))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
-                          }}
-                          labelStyle={{ color: "hsl(var(--foreground))" }}
-                          formatter={(value: number, name: string) => {
-                            const config = meterConfigs.find((c) => c.key === name);
-                            return [formatValue(value, name), config?.label || name];
-                          }}
-                        />
-                        <Legend
-                          formatter={(value) => {
-                            const config = meterConfigs.find((c) => c.key === value);
-                            return config ? `${config.label} (${config.unit})` : value;
-                          }}
-                        />
-                        {selectedMetrics.map((metricKey) => {
-                          const config = meterConfigs.find((c) => c.key === metricKey);
-                          return (
-                            <Line
-                              key={metricKey}
-                              type="monotone"
-                              dataKey={metricKey}
-                              stroke={config?.color || "hsl(var(--primary))"}
-                              strokeWidth={2}
-                              dot={false}
-                              name={metricKey}
-                              animationDuration={300}
-                            />
-                          );
-                        })}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-4 text-sm text-muted-foreground text-center">
-                    Showing last {historicalData.length} data points • {selectedMetrics.length} metric{selectedMetrics.length > 1 ? 's' : ''} selected
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-[220px] justify-between">
+                              <span className="truncate">
+                                {selectedMetrics.length === 1
+                                  ? METER_CONFIGS.find((c) => c.key === selectedMetrics[0])?.label
+                                  : `${selectedMetrics.length} metrics`}
+                              </span>
+                              <ChevronDown className="h-4 w-4 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[220px] p-2" align="end">
+                            <div className="flex flex-col gap-1">
+                              {METER_CONFIGS.map((cfg) => (
+                                <label key={cfg.key} className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer">
+                                  <Checkbox
+                                    checked={selectedMetrics.includes(cfg.key)}
+                                    onCheckedChange={() => toggleMetric(cfg.key)}
+                                  />
+                                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: cfg.color }} />
+                                  <span className="text-sm">{cfg.label} ({cfg.unit})</span>
+                                </label>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <LineChart data={history} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                          <XAxis
+                            dataKey="timestamp"
+                            className="text-xs"
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                            tickFormatter={(v, i) => (i % 5 === 0 ? v : "")}
+                          />
+                          <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--popover))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            formatter={(v: number, name: string) => [formatValue(v, name), METER_CONFIGS.find((c) => c.key === name)?.label || name]}
+                          />
+                          <Legend formatter={(v) => METER_CONFIGS.find((c) => c.key === v)?.label || v} />
+                          {selectedMetrics.map((key) => {
+                            const cfg = METER_CONFIGS.find((c) => c.key === key);
+                            return <Line key={key} type="monotone" dataKey={key} stroke={cfg?.color} strokeWidth={2} dot={false} animationDuration={300} />;
+                          })}
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 text-sm text-muted-foreground text-center">
+                        {history.length} points • {selectedMetrics.length} metric{selectedMetrics.length > 1 ? "s" : ""}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </>
           )}
         </div>
       </div>

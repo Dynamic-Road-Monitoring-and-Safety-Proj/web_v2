@@ -51,3 +51,4 @@ bun.lockb
 *.csv
 .vercel
 .env*.local
+/lambda

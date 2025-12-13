@@ -5,35 +5,24 @@ from contextlib import asynccontextmanager
 import time
 import os
 
-from app.routers import upload, process, dashboard, air_quality
+from app.routers import upload, process, dashboard
 from app.routers.tiles_mock import router as tiles_mock_router
 from app.core.config import OUTPUT_DIR
 
-# Database initialization flag
 USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler - runs on startup and shutdown."""
-    # Startup
-    print("Starting Road Quality Monitoring API...")
-    
+    print("Starting API...")
     if USE_POSTGRES:
         try:
             from app.db.database import init_db, check_db_connection
             if await check_db_connection():
                 await init_db()
-                print("PostgreSQL database initialized")
-            else:
-                print("Warning: PostgreSQL not available, using local storage")
         except Exception as e:
-            print(f"Warning: Database initialization failed: {e}")
-            print("Continuing with local storage mode")
-    
+            print(f"Database initialization failed: {e}")
     yield
-    
-    # Shutdown
     print("Shutting down...")
 
 
@@ -62,16 +51,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
 app.include_router(process.router, prefix="/api", tags=["Process"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
-app.include_router(air_quality.router, prefix="/api", tags=["Air Quality"])
-
-# Mock tiles router (works without PostgreSQL) - for heatmap
 app.include_router(tiles_mock_router, prefix="/api", tags=["Tiles Mock"])
 
-# PostgreSQL-based routers (only if USE_POSTGRES=true)
+# PostgreSQL-based routers
 if USE_POSTGRES:
     from app.routers import tiles, events, uploads_s3
     app.include_router(tiles.router, prefix="/api", tags=["Tiles"])
