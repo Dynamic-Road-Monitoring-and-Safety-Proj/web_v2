@@ -82,6 +82,8 @@ backend/
 Start the FastAPI server using Uvicorn:
 
 ```bash
+.\venv\Scripts\Activate.ps1
+cd backend
 uvicorn app.main:app --reload
 ```
 

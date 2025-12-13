@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { 
   MapPin, 
@@ -22,13 +21,15 @@ import {
   Zap,
   TrendingUp,
   Cog,
-  Loader2
+  Loader2,
+  Car
 } from "lucide-react";
 import { mockEvents, calculateMetrics, mockVideos, Event } from "@/lib/mockData";
 import { fetchDashboardEvents, fetchDashboardVideos, processAllData, getProcessingStatus, getAnnotatedVideos, AnnotatedVideo } from "@/lib/api";
 import { DashboardMap } from "@/components/DashboardMap";
+import { AssignCrewDialog } from "@/components/AssignCrewDialog";
 
-// Custom animated gauge component for the top metrics
+// Custom gauge component for the top metrics (simplified, no heavy animations)
 const AnimatedGauge = ({ 
   value, 
   max, 
@@ -80,7 +81,7 @@ const AnimatedGauge = ({
             className="opacity-30"
           />
           {/* Progress circle */}
-          <motion.circle
+          <circle
             cx="60"
             cy="60"
             r={radius}
@@ -89,9 +90,8 @@ const AnimatedGauge = ({
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={circumference}
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-700 ease-out"
             style={{ 
               filter: `drop-shadow(${("glow" in colorConfig) ? colorConfig.glow : "0 0 10px hsl(var(--primary) / 0.4)"})`
             }}
@@ -99,21 +99,12 @@ const AnimatedGauge = ({
         </svg>
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.5, type: "spring" }}
-          >
+          <div>
             <Icon className={`w-5 h-5 mb-1 ${typeof value === 'number' && max <= 10 ? (percentage < 33 ? "text-green-500" : percentage < 66 ? "text-amber-500" : "text-red-500") : "text-primary"}`} />
-          </motion.div>
-          <motion.span 
-            className="text-2xl font-bold"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
+          </div>
+          <span className="text-2xl font-bold">
             {typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value}
-          </motion.span>
+          </span>
         </div>
       </div>
       <div className="text-center mt-2">
@@ -140,16 +131,17 @@ const InlineSeverityMeter = ({ value, max, label }: { value: number; max: number
         <span className="font-mono font-medium">{value.toFixed(1)}/{max}</span>
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">
-        <motion.div 
-          className={`h-full ${getColor()} rounded-full`}
-          initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+        <div 
+          className={`h-full ${getColor()} rounded-full transition-all duration-500`}
+          style={{ width: `${percentage}%` }}
         />
       </div>
     </div>
   );
 };
+
+// Map view mode type
+type MapViewMode = 'events' | 'heatmap' | 'traffic';
 
 const Dashboard = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -163,6 +155,8 @@ const Dashboard = () => {
   const [annotatedVideos, setAnnotatedVideos] = useState<AnnotatedVideo[]>([]);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [mapViewMode, setMapViewMode] = useState<MapViewMode>('events');
+  const [assignCrewOpen, setAssignCrewOpen] = useState(false);
 
   const fetchProcessingStatus = async () => {
     const status = await getProcessingStatus();
@@ -199,8 +193,13 @@ const Dashboard = () => {
           fetchDashboardVideos(),
           getAnnotatedVideos(5)
         ]);
-        setEvents(fetchedEvents);
-        setVideos(fetchedVideos);
+        
+        // Always use mock events if API returns empty - ensures dummy data shows
+        const finalEvents = fetchedEvents.length > 0 ? fetchedEvents : mockEvents;
+        const finalVideos = fetchedVideos.length > 0 ? fetchedVideos : mockVideos;
+        
+        setEvents(finalEvents);
+        setVideos(finalVideos);
         setAnnotatedVideos(fetchedAnnotatedVideos);
         
         // Set the first annotated video as selected if available
@@ -211,14 +210,14 @@ const Dashboard = () => {
         // Fetch processing status
         fetchProcessingStatus();
         
-        if (fetchedEvents.length > 0) {
+        if (finalEvents.length > 0) {
           // Try to find an event that has a corresponding video
-          const eventWithVideo = fetchedEvents.find(event => {
+          const eventWithVideo = finalEvents.find(event => {
             const timestampStr = event.event_timestamp.replace(/:/g, '-').replace(' ', '_');
-            return fetchedVideos.some((v: any) => v.filename && v.filename.includes(timestampStr));
+            return finalVideos.some((v: any) => v.filename && v.filename.includes(timestampStr));
           });
           
-          setSelectedEvent(eventWithVideo || fetchedEvents[0]);
+          setSelectedEvent(eventWithVideo || finalEvents[0]);
         }
       } catch (error) {
         console.error("Failed to load dashboard data", error);
@@ -234,8 +233,11 @@ const Dashboard = () => {
     loadData();
   }, []);
 
-  const metrics = calculateMetrics(events.length > 0 ? events : mockEvents);
-  const displayVideos = videos.length > 0 ? videos : mockVideos;
+  // Memoize metrics calculation to avoid recalculating on every render
+  const displayEvents = useMemo(() => events.length > 0 ? events : mockEvents, [events]);
+  const displayVideos = useMemo(() => videos.length > 0 ? videos : mockVideos, [videos]);
+  const metrics = useMemo(() => calculateMetrics(displayEvents), [displayEvents]);
+  const currentEvent = selectedEvent || displayEvents[0];
 
   if (loading) {
     return (
@@ -245,27 +247,16 @@ const Dashboard = () => {
     );
   }
 
-  const displayEvents = events.length > 0 ? events : mockEvents;
-  const currentEvent = selectedEvent || displayEvents[0];
-
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
+      
+      {/* Assign Crew Dialog */}
+      <AssignCrewDialog 
+        open={assignCrewOpen} 
+        onOpenChange={setAssignCrewOpen} 
+        event={currentEvent}
+      />
       
       {/* Header */}
       <div className="pt-20 pb-6 px-4 sm:px-6 lg:px-8 border-b border-border/50 glass-card">
@@ -326,20 +317,13 @@ const Dashboard = () => {
 
       <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Top Metrics Row - Three Key Indicators */}
-        <motion.div
-          className="mb-6"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
+        <div className="mb-6 animate-in fade-in duration-500">
           <Card className="glass-card shadow-card overflow-hidden">
             <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Total Events */}
-                <motion.div 
-                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10"
-                  whileHover={{ scale: 1.02 }}
-                  transition={{ duration: 0.2 }}
+                <div 
+                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 hover:scale-[1.02] transition-transform"
                 >
                   <AnimatedGauge
                     value={metrics.totalEvents}
@@ -358,13 +342,11 @@ const Dashboard = () => {
                       <span className="text-green-500 font-medium">+12%</span> from yesterday
                     </div>
                   </div>
-                </motion.div>
+                </div>
 
                 {/* Average Roughness */}
-                <motion.div 
-                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10"
-                  whileHover={{ scale: 1.02 }}
-                  transition={{ duration: 0.2 }}
+                <div 
+                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10 hover:scale-[1.02] transition-transform"
                 >
                   <AnimatedGauge
                     value={metrics.avgRoughness}
@@ -391,13 +373,11 @@ const Dashboard = () => {
                       ))}
                     </div>
                   </div>
-                </motion.div>
+                </div>
 
                 {/* Average Impact */}
-                <motion.div 
-                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/10"
-                  whileHover={{ scale: 1.02 }}
-                  transition={{ duration: 0.2 }}
+                <div 
+                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/10 hover:scale-[1.02] transition-transform"
                 >
                   <AnimatedGauge
                     value={metrics.avgImpactIntensity}
@@ -424,40 +404,32 @@ const Dashboard = () => {
                       ))}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        <motion.div 
-          className="grid lg:grid-cols-4 gap-6"
-          variants={container}
-          initial="hidden"
-          animate="show"
-        >
+        <div className="grid lg:grid-cols-4 gap-6">
           {/* Left: Secondary KPI Cards */}
           <div className="space-y-4">
-            <motion.div variants={item}>
+            <div className="animate-in slide-in-from-left duration-300">
               <Card className="glass-card shadow-card border-l-4 border-l-urgent">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-muted-foreground">Needs Attention</span>
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
+                    <div className="animate-pulse">
                       <AlertTriangle className="w-4 h-4 text-urgent" />
-                    </motion.div>
+                    </div>
                   </div>
                   <div className="text-3xl font-bold text-urgent mb-2">{metrics.needsAttention}</div>
                   <Meter value={metrics.needsAttention} max={50} color="bg-urgent" />
                   <div className="text-xs text-muted-foreground mt-2">Urgent fixes required</div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
 
-            <motion.div variants={item}>
+            <div className="animate-in slide-in-from-left duration-300 delay-100">
               <Card className="glass-card shadow-card">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -469,9 +441,9 @@ const Dashboard = () => {
                   <div className="text-xs text-muted-foreground mt-2">Vehicles/frame</div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
 
-            <motion.div variants={item}>
+            <div className="animate-in slide-in-from-left duration-300 delay-200">
               <Card className="glass-card shadow-card">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -494,13 +466,13 @@ const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           </div>
 
           {/* Center: Map and Video */}
           <div className="lg:col-span-2 space-y-6">
             {/* Map Section */}
-            <motion.div variants={item}>
+            <div className="animate-in fade-in duration-500">
               <Card className="glass-card shadow-card h-full">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
@@ -508,14 +480,30 @@ const Dashboard = () => {
                       <MapPin className="w-5 h-5 text-primary" />
                       Interactive Map
                     </h2>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Potholes
+                    <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                      <Button 
+                        size="sm" 
+                        variant={mapViewMode === 'events' ? "default" : "ghost"} 
+                        className="text-xs h-7"
+                        onClick={() => setMapViewMode('events')}
+                      >
+                        📍 Events
                       </Button>
-                      <Button size="sm" variant="outline" className="text-xs">
-                        AQI
+                      <Button 
+                        size="sm" 
+                        variant={mapViewMode === 'heatmap' ? "default" : "ghost"} 
+                        className="text-xs h-7"
+                        onClick={() => setMapViewMode('heatmap')}
+                      >
+                        🔥 Heatmap
                       </Button>
-                      <Button size="sm" variant="outline" className="text-xs">
+                      <Button 
+                        size="sm" 
+                        variant={mapViewMode === 'traffic' ? "default" : "ghost"} 
+                        className="text-xs h-7"
+                        onClick={() => setMapViewMode('traffic')}
+                      >
+                        <Car className="w-3 h-3 mr-1" />
                         Traffic
                       </Button>
                     </div>
@@ -525,30 +513,66 @@ const Dashboard = () => {
                     <DashboardMap 
                       events={displayEvents} 
                       selectedEvent={currentEvent} 
-                      onEventSelect={setSelectedEvent} 
+                      onEventSelect={setSelectedEvent}
+                      showHeatmap={mapViewMode === 'heatmap'}
+                      showTraffic={mapViewMode === 'traffic'}
                     />
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-urgent border-2 border-urgent" />
-                      <span className="text-muted-foreground">Urgent</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-primary border-2 border-primary" />
-                      <span className="text-muted-foreground">Normal</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-muted border-2 border-border" />
-                      <span className="text-muted-foreground">Resolved</span>
-                    </div>
+                    {mapViewMode === 'heatmap' ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-green-500" />
+                          <span className="text-muted-foreground">Low Severity</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                          <span className="text-muted-foreground">Medium</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-red-500" />
+                          <span className="text-muted-foreground">High Severity</span>
+                        </div>
+                      </>
+                    ) : mapViewMode === 'traffic' ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-green-500" />
+                          <span className="text-muted-foreground">Light Traffic</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                          <span className="text-muted-foreground">Moderate</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-red-500" />
+                          <span className="text-muted-foreground">Heavy Traffic</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-urgent border-2 border-urgent" />
+                          <span className="text-muted-foreground">Urgent</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-primary border-2 border-primary" />
+                          <span className="text-muted-foreground">Normal</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-muted border-2 border-border" />
+                          <span className="text-muted-foreground">Resolved</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
 
             {/* Video Section */}
-            <motion.div variants={item}>
+            <div className="animate-in fade-in duration-500 delay-100">
               <Card className="glass-card shadow-card">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
@@ -644,12 +668,12 @@ const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           </div>
 
           {/* Right: Event Details */}
           <div className="space-y-4">
-            <motion.div variants={item}>
+            <div className="animate-in slide-in-from-right duration-300">
               <Card className="glass-card shadow-card">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
@@ -709,7 +733,11 @@ const Dashboard = () => {
                   </div>
 
                   <div className="pt-4 border-t border-border/50 space-y-2">
-                    <Button className="w-full gradient-primary shadow-glow" size="sm">
+                    <Button 
+                      className="w-full gradient-primary shadow-glow" 
+                      size="sm"
+                      onClick={() => setAssignCrewOpen(true)}
+                    >
                       <Users className="w-4 h-4 mr-2" />
                       Assign to Crew
                     </Button>
@@ -720,9 +748,9 @@ const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
 
-            <motion.div variants={item}>
+            <div className="animate-in slide-in-from-right duration-300 delay-100">
               <Card className="glass-card shadow-card">
                 <CardContent className="p-6 space-y-3">
                   <h3 className="font-semibold text-sm">Sensor Telemetry</h3>
@@ -783,9 +811,9 @@ const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
