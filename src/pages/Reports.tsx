@@ -178,7 +178,7 @@ const Reports = () => {
   // Export data as JSON
   const handleExport = () => {
     const exportData = {
-      date: selectedDate,
+      city: selectedCity,
       exportedAt: new Date().toISOString(),
       stats,
       congestion: congestionData,
@@ -188,7 +188,7 @@ const Reports = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `road_report_${selectedDate}.json`;
+    a.download = `road_report_${selectedCity}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -202,16 +202,18 @@ const Reports = () => {
         csv += `${item.hex_id},${item.road_name},${item.congestion_level},${item.velocity_avg},${item.vehicle_count_avg},${item.peak_hour_flag},${item.event_count},${item.location.lat},${item.location.lon},${item.last_updated}\n`;
       });
     } else {
-      csv = 'hex_id,prophet_classification,ride_comfort_score,roughness_index,spike_index,damage_area,event_count,lat,lon,last_updated\n';
+      csv = 'hex_id,prophet_classification,ride_comfort_score,roughness_index,total_potholes,total_cracks,damage_area,event_count,lat,lon,last_updated\n';
       damageData.forEach(item => {
-        csv += `${item.hex_id},${item.prophet_classification},${item.derived_metrics.ride_comfort_score},${item.derived_metrics.roughness_index},${item.derived_metrics.spike_index},${item.road_damage_area_avg},${item.event_count},${item.location.lat},${item.location.lon},${item.last_updated}\n`;
+        const comfortScore = item.derived_metrics?.ride_comfort_score || 'N/A';
+        const roughnessIndex = item.derived_metrics?.roughness_index || 'N/A';
+        csv += `${item.hex_id},${item.prophet_classification},${comfortScore},${roughnessIndex},${item.total_potholes},${item.total_cracks},${item.road_damage_area_avg},${item.event_count},${item.location.lat},${item.location.lon},${item.last_updated}\n`;
       });
     }
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${type}_report_${selectedDate}.csv`;
+    a.download = `${type}_report_${selectedCity}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -244,18 +246,18 @@ const Reports = () => {
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
               Reports & Analytics
             </h1>
-            <p className="text-muted-foreground">Data from DynamoDB • Date: {selectedDate}</p>
+            <p className="text-muted-foreground">Data from DynamoDB • City: {selectedCity.charAt(0).toUpperCase() + selectedCity.slice(1)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {/* Date Selector */}
-            <Select value={selectedDate} onValueChange={setSelectedDate}>
+            {/* City Selector */}
+            <Select value={selectedCity} onValueChange={setSelectedCity}>
               <SelectTrigger className="w-48">
-                <Calendar className="w-4 h-4 mr-2" />
+                <MapPin className="w-4 h-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {availableDates.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                {availableCities.map((city) => (
+                  <SelectItem key={city.name} value={city.name}>{city.displayName}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
