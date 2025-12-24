@@ -209,10 +209,15 @@ function DamageHexLayer({
                   Quality: {item.prophet_classification.toUpperCase()}
                 </div>
                 <div className="text-xs space-y-1">
-                  <div>📏 Roughness: <strong>{item.derived_metrics.roughness_index.toFixed(3)}</strong></div>
-                  <div>⚡ Spike: <strong>{item.derived_metrics.spike_index.toFixed(3)}</strong></div>
-                  <div>💺 Comfort: <strong>{item.derived_metrics.ride_comfort_score.toFixed(0)}/100</strong></div>
-                  <div>📐 Damage Area: <strong>{item.road_damage_area_avg.toFixed(2)}</strong></div>
+                  {item.derived_metrics && (
+                    <>
+                      <div>📏 Roughness: <strong>{item.derived_metrics.roughness_index.toFixed(2)}</strong></div>
+                      <div>💺 Comfort: <strong>{item.derived_metrics.ride_comfort_score.toFixed(1)}/10</strong></div>
+                    </>
+                  )}
+                  <div>🕳️ Potholes: <strong>{item.total_potholes}</strong></div>
+                  <div>⚡ Cracks: <strong>{item.total_cracks}</strong></div>
+                  <div>📐 Damage Area: <strong>{item.road_damage_area_avg.toFixed(1)}%</strong></div>
                   <div>📍 Events: <strong>{item.event_count}</strong></div>
                 </div>
                 <div className="text-xs text-gray-500 mt-2 pt-2 border-t">
@@ -326,9 +331,9 @@ export function DashboardMap({
         <div className="absolute inset-0 z-[1000] bg-background/50 backdrop-blur-sm flex items-center justify-center">
           <div className="text-center p-4">
             <div className="text-4xl mb-2">🗺️</div>
-            <p className="text-muted-foreground">No data for selected filters</p>
+            <p className="text-muted-foreground">No data for selected city</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Try changing the date or filter settings
+              Try selecting a different city
             </p>
           </div>
         </div>

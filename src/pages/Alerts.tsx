@@ -4,16 +4,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle, Clock, Bell, Info, Car, Route, RefreshCw, Loader2, Calendar } from "lucide-react";
+import { AlertTriangle, CheckCircle, Clock, Bell, Info, Car, Route, RefreshCw, Loader2, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   fetchAllData,
-  getAvailableDates,
-  getTodayDateString,
+  fetchAvailableCities,
   getCongestionColor,
   getDamageColor,
 } from "@/lib/dynamodb";
-import { CongestionItem, DamageItem } from "@/lib/types";
+import { CongestionItem, DamageItem, CityInfo } from "@/lib/types";
+import { mockCities, getMockDataResponse, USE_MOCK_DATA } from "@/lib/mockData";
 
 // Alert type derived from data
 interface Alert {
@@ -36,18 +36,13 @@ const generateCongestionAlerts = (data: CongestionItem[]): Alert[] => {
     let status = '';
 
     switch (item.congestion_level) {
-      case 'critical':
-        type = 'critical';
-        title = 'Critical Traffic Congestion';
-        status = 'Emergency';
-        break;
       case 'high':
-        type = 'warning';
+        type = 'critical';
         title = 'High Traffic Congestion';
         status = 'Monitoring';
         break;
       case 'medium':
-        type = 'info';
+        type = 'warning';
         title = 'Moderate Traffic Flow';
         status = 'Normal';
         break;
@@ -76,8 +71,7 @@ const generateCongestionAlerts = (data: CongestionItem[]): Alert[] => {
       status,
       hexId: item.hex_id,
       dataType: 'congestion',
-      severity: item.congestion_level === 'critical' ? 100 
-        : item.congestion_level === 'high' ? 75
+      severity: item.congestion_level === 'high' ? 100
         : item.congestion_level === 'medium' ? 50 : 25,
     };
   });
@@ -91,20 +85,15 @@ const generateDamageAlerts = (data: DamageItem[]): Alert[] => {
     let status = '';
 
     switch (item.prophet_classification) {
-      case 'critical':
+      case 'severe':
         type = 'critical';
-        title = 'Critical Road Damage Detected';
+        title = 'Severe Road Damage Detected';
         status = 'Urgent Repair';
         break;
-      case 'poor':
-        type = 'warning';
-        title = 'Poor Road Condition';
-        status = 'Needs Attention';
-        break;
       case 'moderate':
-        type = 'info';
+        type = 'warning';
         title = 'Moderate Road Wear';
-        status = 'Scheduled';
+        status = 'Needs Attention';
         break;
       default:
         type = 'success';
@@ -122,17 +111,18 @@ const generateDamageAlerts = (data: DamageItem[]): Alert[] => {
         ? `${Math.floor(diffMins / 60)} hours ago`
         : `${Math.floor(diffMins / 1440)} days ago`;
 
+    const comfortScore = item.derived_metrics?.ride_comfort_score?.toFixed(1) || 'N/A';
+
     return {
       id: `damage-${item.hex_id}`,
       type,
       title,
-      location: `Hex ${item.hex_id.slice(0, 8)} | Comfort: ${item.derived_metrics.ride_comfort_score.toFixed(0)}/100`,
+      location: `Hex ${item.hex_id.slice(0, 8)} | Comfort: ${comfortScore}/10`,
       time: timeAgo,
       status,
       hexId: item.hex_id,
       dataType: 'damage',
-      severity: item.prophet_classification === 'critical' ? 100 
-        : item.prophet_classification === 'poor' ? 75
+      severity: item.prophet_classification === 'severe' ? 100 
         : item.prophet_classification === 'moderate' ? 50 : 25,
     };
   });
@@ -156,10 +146,29 @@ const Alerts = () => {
   const [damageData, setDamageData] = useState<DamageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+  const [selectedCity, setSelectedCity] = useState('mumbai');
+  const [availableCities, setAvailableCities] = useState<CityInfo[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'critical' | 'warning' | 'congestion' | 'damage'>('all');
 
-  const availableDates = useMemo(() => getAvailableDates(), []);
+  // Load available cities
+  useEffect(() => {
+    const loadCities = async () => {
+      if (USE_MOCK_DATA) {
+        setAvailableCities(mockCities);
+      } else {
+        const cities = await fetchAvailableCities();
+        if (cities.length > 0) {
+          setAvailableCities(cities);
+          if (!cities.find(c => c.name === selectedCity)) {
+            setSelectedCity(cities[0].name);
+          }
+        } else {
+          setAvailableCities(mockCities);
+        }
+      }
+    };
+    loadCities();
+  }, []);
 
   const loadData = async (showRefresh = false) => {
     try {
@@ -168,7 +177,14 @@ const Alerts = () => {
       } else {
         setLoading(true);
       }
-      const data = await fetchAllData(selectedDate);
+      
+      let data;
+      if (USE_MOCK_DATA) {
+        data = getMockDataResponse();
+      } else {
+        data = await fetchAllData(selectedCity);
+      }
+      
       setCongestionData(data.congestion);
       setDamageData(data.damage);
     } catch (error) {
@@ -180,8 +196,10 @@ const Alerts = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, [selectedDate]);
+    if (selectedCity) {
+      loadData();
+    }
+  }, [selectedCity]);
 
   // Generate and filter alerts
   const alerts = useMemo(() => {
@@ -240,15 +258,15 @@ const Alerts = () => {
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
-            {/* Date Selector */}
-            <Select value={selectedDate} onValueChange={setSelectedDate}>
+            {/* City Selector */}
+            <Select value={selectedCity} onValueChange={setSelectedCity}>
               <SelectTrigger className="w-48">
-                <Calendar className="w-4 h-4 mr-2" />
+                <MapPin className="w-4 h-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {availableDates.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                {availableCities.map((city) => (
+                  <SelectItem key={city.name} value={city.name}>{city.displayName}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

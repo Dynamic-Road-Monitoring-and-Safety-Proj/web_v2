@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowRight, MapPin, AlertTriangle, Activity, TrendingUp, Zap } from "lucide-react";
-import { mockEvents, calculateMetrics } from "@/lib/mockData";
+import { mockDamageData, mockCongestionData, calculateMockStats } from "@/lib/mockData";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -21,7 +21,7 @@ const itemVariants = {
 };
 
 export const DemoPreviewSection = () => {
-  const metrics = calculateMetrics(mockEvents);
+  const stats = calculateMockStats(mockCongestionData, mockDamageData);
 
   return (
     <section className="py-24 relative overflow-hidden">
@@ -103,9 +103,9 @@ export const DemoPreviewSection = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   {/* Simplified map representation */}
                   <div className="relative w-full h-full">
-                    {mockEvents.slice(0, 4).map((event, index) => (
+                    {mockDamageData.slice(0, 4).map((item, index) => (
                       <motion.div
-                        key={event.id}
+                        key={item.hex_id}
                         className="absolute w-6 h-6 rounded-full bg-urgent/20 border-2 border-urgent cursor-pointer hover:scale-125 transition-transform"
                         style={{
                           left: `${20 + index * 20}%`,
@@ -115,7 +115,7 @@ export const DemoPreviewSection = () => {
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ delay: 0.5 + index * 0.2, duration: 0.5 }}
                         whileHover={{ scale: 1.3 }}
-                        title={event.street_name}
+                        title={`Hex ${item.hex_id.slice(0, 8)}`}
                       >
                         <motion.div 
                           className="absolute inset-0 rounded-full bg-urgent/50"
@@ -138,7 +138,7 @@ export const DemoPreviewSection = () => {
                           <AlertTriangle className="w-8 h-8 mx-auto text-urgent" />
                         </motion.div>
                         <p className="text-sm font-medium">
-                          {mockEvents.filter(e => e.needs_attention).length} hotspots detected
+                          {stats.severeDamageCount} severe damage areas detected
                         </p>
                       </div>
                     </motion.div>
@@ -177,11 +177,11 @@ export const DemoPreviewSection = () => {
                   viewport={{ once: true }}
                   transition={{ delay: 0.3, type: "spring" }}
                 >
-                  {metrics.totalEvents}
+                  {stats.totalEvents}
                 </motion.div>
                 <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <TrendingUp className="w-3 h-3 text-green-500" />
-                  Last 24 hours
+                  From monitored areas
                 </div>
               </Card>
             </motion.div>
@@ -189,7 +189,7 @@ export const DemoPreviewSection = () => {
             <motion.div whileHover={{ scale: 1.03, y: -5 }} transition={{ duration: 0.2 }}>
               <Card className="glass-card shadow-card p-6 group hover:shadow-xl transition-shadow">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Urgent Events</span>
+                  <span className="text-sm text-muted-foreground">Severe Areas</span>
                   <motion.div
                     animate={{ scale: [1, 1.2, 1] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
@@ -204,11 +204,11 @@ export const DemoPreviewSection = () => {
                   viewport={{ once: true }}
                   transition={{ delay: 0.4, type: "spring" }}
                 >
-                  {metrics.needsAttention}
+                  {stats.severeDamageCount + stats.highCongestionCount}
                 </motion.div>
                 <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <Zap className="w-3 h-3 text-urgent" />
-                  Needs immediate attention
+                  Needs attention
                 </div>
               </Card>
             </motion.div>
@@ -216,7 +216,7 @@ export const DemoPreviewSection = () => {
             <motion.div whileHover={{ scale: 1.03, y: -5 }} transition={{ duration: 0.2 }}>
               <Card className="glass-card shadow-card p-6 group hover:shadow-xl transition-shadow">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Avg Roughness</span>
+                  <span className="text-sm text-muted-foreground">Total Potholes</span>
                   <Activity className="w-4 h-4 text-secondary" />
                 </div>
                 <motion.div 
@@ -226,9 +226,9 @@ export const DemoPreviewSection = () => {
                   viewport={{ once: true }}
                   transition={{ delay: 0.5, type: "spring" }}
                 >
-                  {metrics.avgRoughness}
+                  {stats.totalPotholes}
                 </motion.div>
-                <div className="text-xs text-muted-foreground mt-1">Index scale 0-10</div>
+                <div className="text-xs text-muted-foreground mt-1">Detected across all areas</div>
               </Card>
             </motion.div>
           </motion.div>

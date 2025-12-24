@@ -1,238 +1,256 @@
-// Mock data based on pothole_events_metrics.json structure
-export interface Event {
-  id: string;
-  lat_center: number;
-  lon_center: number;
-  event_timestamp: string;
-  pothole_confidence: number;
-  roughness_index: number;
-  impact_intensity: number;
-  frames_with_pothole: number;
-  avg_vehicles_per_frame: number;
-  peak_vehicle_count: number;
-  needs_attention: boolean;
-  validation_score: number;
-  sector: string;
-  street_name: string;
-  accel: {
-    ax: number;
-    ay: number;
-    az: number;
-  };
-  gyro_intensity: number;
-  az_spike: number;
-  video_url?: string;
-  thumbnail_url?: string;
-}
+// Mock data for testing based on new architecture
+// Table structure: road_{city}_damage, road_{city}_congestion
 
-// Chandigarh coordinates: approximately 30.7333° N, 76.7794° E
-export const mockEvents: Event[] = [
+import {
+  CongestionItem,
+  DamageItem,
+  CityInfo,
+  DashboardStats,
+  FetchDataResponse,
+} from './types';
+
+// ============================================
+// Mock Cities
+// ============================================
+export const mockCities: CityInfo[] = [
+  { name: 'mumbai', displayName: 'Mumbai', state: 'Maharashtra' },
+  { name: 'delhi', displayName: 'Delhi', state: 'Delhi' },
+  { name: 'bangalore', displayName: 'Bangalore', state: 'Karnataka' },
+  { name: 'chandigarh', displayName: 'Chandigarh', state: 'Chandigarh' },
+];
+
+// ============================================
+// Mock Congestion Data
+// ============================================
+export const mockCongestionData: CongestionItem[] = [
   {
-    id: "evt_001",
-    lat_center: 30.7465,
-    lon_center: 76.7886,
-    event_timestamp: "2025-11-24T08:23:15Z",
-    pothole_confidence: 0.92,
-    roughness_index: 8.4,
-    impact_intensity: 7.2,
-    frames_with_pothole: 12,
-    avg_vehicles_per_frame: 4.5,
-    peak_vehicle_count: 8,
-    needs_attention: true,
-    validation_score: 0.88,
-    sector: "Sector 17",
-    street_name: "Jan Marg",
-    accel: { ax: 0.12, ay: -0.05, az: 9.82 },
-    gyro_intensity: 1.5,
-    az_spike: 12.3,
+    hex_id: '8c2badb1d7f5cff',
+    velocity_avg: 15.2,
+    vehicle_count_avg: 22.5,
+    vehicle_composition: { light: 50, medium: 30, heavy: 20 },
+    vehicle_detailed: {
+      car: 45,
+      motorcycle: 30,
+      bicycle: 5,
+      cycle_rickshaw: 2,
+      auto_rickshaw: 18,
+      e_rickshaw: 8,
+      bus: 6,
+      truck: 10,
+      tractor: 2,
+    },
+    traffic_density: 8.5,
+    peak_vehicle_count: 25,
+    road_name: 'Marine Drive',
+    peak_hour_flag: true,
+    congestion_level: 'high',
+    event_count: 12,
+    last_5_videos: ['s3://bucket/videos/vid1.mp4', 's3://bucket/videos/vid2.mp4'],
+    last_updated: '2025-12-25T11:00:00',
+    location: { lat: 19.0762, lon: 72.8780, city: 'mumbai', state: 'Maharashtra' },
   },
   {
-    id: "evt_002",
-    lat_center: 30.7223,
-    lon_center: 76.7645,
-    event_timestamp: "2025-11-24T09:45:32Z",
-    pothole_confidence: 0.85,
-    roughness_index: 6.8,
-    impact_intensity: 5.9,
-    frames_with_pothole: 8,
-    avg_vehicles_per_frame: 6.2,
+    hex_id: '8c2badb1d7f6aaa',
+    velocity_avg: 35.8,
+    vehicle_count_avg: 8.2,
+    vehicle_composition: { light: 70, medium: 20, heavy: 10 },
+    vehicle_detailed: {
+      car: 25,
+      motorcycle: 15,
+      bicycle: 3,
+      cycle_rickshaw: 1,
+      auto_rickshaw: 8,
+      e_rickshaw: 4,
+      bus: 2,
+      truck: 3,
+      tractor: 1,
+    },
+    traffic_density: 3.5,
     peak_vehicle_count: 12,
-    needs_attention: true,
-    validation_score: 0.82,
-    sector: "Sector 35",
-    street_name: "Dakshin Marg",
-    accel: { ax: 0.08, ay: -0.03, az: 9.79 },
-    gyro_intensity: 1.2,
-    az_spike: 10.1,
+    road_name: 'Bandra Link Road',
+    peak_hour_flag: false,
+    congestion_level: 'low',
+    event_count: 5,
+    last_5_videos: ['s3://bucket/videos/vid3.mp4'],
+    last_updated: '2025-12-25T09:30:00',
+    location: { lat: 19.0595, lon: 72.8295, city: 'mumbai', state: 'Maharashtra' },
   },
   {
-    id: "evt_003",
-    lat_center: 30.7611,
-    lon_center: 76.7755,
-    event_timestamp: "2025-11-24T11:12:48Z",
-    pothole_confidence: 0.78,
-    roughness_index: 5.2,
-    impact_intensity: 4.5,
-    frames_with_pothole: 6,
-    avg_vehicles_per_frame: 3.8,
-    peak_vehicle_count: 7,
-    needs_attention: false,
-    validation_score: 0.75,
-    sector: "Sector 9",
-    street_name: "Madhya Marg",
-    accel: { ax: 0.05, ay: -0.02, az: 9.80 },
-    gyro_intensity: 0.9,
-    az_spike: 8.5,
-  },
-  {
-    id: "evt_004",
-    lat_center: 30.7389,
-    lon_center: 76.7912,
-    event_timestamp: "2025-11-24T13:27:05Z",
-    pothole_confidence: 0.95,
-    roughness_index: 9.1,
-    impact_intensity: 8.3,
-    frames_with_pothole: 15,
-    avg_vehicles_per_frame: 5.1,
-    peak_vehicle_count: 10,
-    needs_attention: true,
-    validation_score: 0.91,
-    sector: "Sector 22",
-    street_name: "Purva Marg",
-    accel: { ax: 0.15, ay: -0.07, az: 9.85 },
-    gyro_intensity: 1.8,
-    az_spike: 13.7,
-  },
-  {
-    id: "evt_005",
-    lat_center: 30.7145,
-    lon_center: 76.7534,
-    event_timestamp: "2025-11-24T14:53:22Z",
-    pothole_confidence: 0.71,
-    roughness_index: 4.6,
-    impact_intensity: 3.8,
-    frames_with_pothole: 5,
-    avg_vehicles_per_frame: 2.9,
-    peak_vehicle_count: 5,
-    needs_attention: false,
-    validation_score: 0.68,
-    sector: "Sector 43",
-    street_name: "Himalaya Marg",
-    accel: { ax: 0.03, ay: -0.01, az: 9.78 },
-    gyro_intensity: 0.7,
-    az_spike: 7.2,
-  },
-  {
-    id: "evt_006",
-    lat_center: 30.7528,
-    lon_center: 76.7823,
-    event_timestamp: "2025-11-24T16:18:40Z",
-    pothole_confidence: 0.88,
-    roughness_index: 7.5,
-    impact_intensity: 6.7,
-    frames_with_pothole: 10,
-    avg_vehicles_per_frame: 4.8,
-    peak_vehicle_count: 9,
-    needs_attention: true,
-    validation_score: 0.85,
-    sector: "Sector 11",
-    street_name: "Udyog Path",
-    accel: { ax: 0.11, ay: -0.04, az: 9.81 },
-    gyro_intensity: 1.4,
-    az_spike: 11.2,
+    hex_id: '8c2badb1d7f7bbb',
+    velocity_avg: 22.5,
+    vehicle_count_avg: 15.0,
+    vehicle_composition: { light: 55, medium: 30, heavy: 15 },
+    vehicle_detailed: {
+      car: 35,
+      motorcycle: 20,
+      bicycle: 4,
+      cycle_rickshaw: 2,
+      auto_rickshaw: 12,
+      e_rickshaw: 6,
+      bus: 4,
+      truck: 5,
+      tractor: 2,
+    },
+    traffic_density: 5.5,
+    peak_vehicle_count: 18,
+    road_name: 'Western Express Highway',
+    peak_hour_flag: true,
+    congestion_level: 'medium',
+    event_count: 8,
+    last_5_videos: ['s3://bucket/videos/vid4.mp4', 's3://bucket/videos/vid5.mp4'],
+    last_updated: '2025-12-25T10:15:00',
+    location: { lat: 19.1136, lon: 72.8697, city: 'mumbai', state: 'Maharashtra' },
   },
 ];
 
-export interface VideoAnnotation {
-  id: string;
-  video_url: string;
-  title: string;
-  event_id: string;
-  timestamp: string;
-  duration: number;
-  frames: Array<{
-    frame_number: number;
-    timestamp: number;
-    detections: Array<{
-      type: string;
-      confidence: number;
-      bbox: [number, number, number, number];
-      roughness?: number;
-    }>;
-  }>;
-}
-
-export const mockVideos: VideoAnnotation[] = [
+// ============================================
+// Mock Damage Data
+// ============================================
+export const mockDamageData: DamageItem[] = [
   {
-    id: "vid_001",
-    video_url: "https://example.com/video1.mp4",
-    title: "Sector 17 - Jan Marg - High Severity",
-    event_id: "evt_001",
-    timestamp: "2025-11-24T08:23:15Z",
-    duration: 45,
-    frames: [],
+    hex_id: '8a2badb0c6e7fff',
+    sensor_metrics: {
+      acc_x_avg: 0.12,
+      acc_y_avg: 0.05,
+      acc_z_avg: 9.81,
+      gyro_x_avg: 0.02,
+      gyro_y_avg: 0.01,
+      gyro_z_avg: 0.03,
+    },
+    derived_metrics: {
+      roughness_index: 2.5,
+      spike_index: 1.2,
+      vertical_displacement: 0.05,
+      jerk_magnitude: 3.2,
+      ride_comfort_score: 6.5,
+    },
+    road_damage_area_avg: 15.5,
+    damage_severity_score: 62.0,
+    damage_frequency: 25.0,
+    total_potholes: 8,
+    total_cracks: 3,
+    pothole_events_count: 5,
+    prophet_classification: 'moderate',
+    event_count: 5,
+    last_5_videos: ['s3://bucket/videos/damage1.mp4', 's3://bucket/videos/damage2.mp4'],
+    last_corporation_visit: null,
+    last_updated: '2025-12-25T10:30:00',
+    location: { lat: 19.0760, lon: 72.8777, city: 'mumbai', state: 'Maharashtra' },
   },
   {
-    id: "vid_002",
-    video_url: "https://example.com/video2.mp4",
-    title: "Sector 22 - Purva Marg - Critical",
-    event_id: "evt_004",
-    timestamp: "2025-11-24T13:27:05Z",
-    duration: 52,
-    frames: [],
+    hex_id: '8a2badb0c6e8fff',
+    sensor_metrics: {
+      acc_x_avg: 0.25,
+      acc_y_avg: 0.12,
+      acc_z_avg: 10.2,
+      gyro_x_avg: 0.08,
+      gyro_y_avg: 0.05,
+      gyro_z_avg: 0.12,
+    },
+    derived_metrics: {
+      roughness_index: 4.2,
+      spike_index: 3.5,
+      vertical_displacement: 0.15,
+      jerk_magnitude: 8.5,
+      ride_comfort_score: 3.2,
+    },
+    road_damage_area_avg: 35.0,
+    damage_severity_score: 85.0,
+    damage_frequency: 60.0,
+    total_potholes: 15,
+    total_cracks: 8,
+    pothole_events_count: 12,
+    prophet_classification: 'severe',
+    event_count: 10,
+    last_5_videos: ['s3://bucket/videos/damage3.mp4'],
+    last_corporation_visit: '2025-12-20T14:00:00',
+    last_updated: '2025-12-25T08:45:00',
+    location: { lat: 19.0850, lon: 72.8890, city: 'mumbai', state: 'Maharashtra' },
+  },
+  {
+    hex_id: '8a2badb0c6e9fff',
+    sensor_metrics: {
+      acc_x_avg: 0.05,
+      acc_y_avg: 0.02,
+      acc_z_avg: 9.78,
+      gyro_x_avg: 0.01,
+      gyro_y_avg: 0.005,
+      gyro_z_avg: 0.01,
+    },
+    derived_metrics: {
+      roughness_index: 0.8,
+      spike_index: 0.3,
+      vertical_displacement: 0.01,
+      jerk_magnitude: 1.0,
+      ride_comfort_score: 9.2,
+    },
+    road_damage_area_avg: 2.0,
+    damage_severity_score: 12.0,
+    damage_frequency: 5.0,
+    total_potholes: 1,
+    total_cracks: 0,
+    pothole_events_count: 1,
+    prophet_classification: 'good',
+    event_count: 3,
+    last_5_videos: ['s3://bucket/videos/damage4.mp4'],
+    last_corporation_visit: '2025-12-15T10:00:00',
+    last_updated: '2025-12-25T11:00:00',
+    location: { lat: 19.0650, lon: 72.8650, city: 'mumbai', state: 'Maharashtra' },
   },
 ];
 
-export interface KPIMetrics {
-  totalEvents: number;
-  needsAttention: number;
-  avgRoughness: number;
-  avgImpactIntensity: number;
-  avgTrafficDensity: number;
-  avgAQI: number;
-}
+// ============================================
+// Calculate Mock Stats
+// ============================================
+export const calculateMockStats = (
+  congestion: CongestionItem[],
+  damage: DamageItem[]
+): DashboardStats => {
+  const highCongestionCount = congestion.filter(c => c.congestion_level === 'high').length;
+  const severeDamageCount = damage.filter(d => d.prophet_classification === 'severe').length;
+  
+  const avgVelocity = congestion.length > 0
+    ? congestion.reduce((sum, c) => sum + c.velocity_avg, 0) / congestion.length
+    : 0;
+  
+  const avgRideComfort = damage.length > 0
+    ? damage.reduce((sum, d) => sum + (d.derived_metrics?.ride_comfort_score || 5), 0) / damage.length
+    : 10;
+  
+  const peakHourCells = congestion.filter(c => c.peak_hour_flag).length;
+  
+  const totalEvents = congestion.reduce((sum, c) => sum + c.event_count, 0)
+    + damage.reduce((sum, d) => sum + d.event_count, 0);
 
-export const calculateMetrics = (events: Event[]): KPIMetrics => {
-  const totalEvents = events.length;
-  if (totalEvents === 0) {
-    return {
-      totalEvents: 0,
-      needsAttention: 0,
-      avgRoughness: 0,
-      avgImpactIntensity: 0,
-      avgTrafficDensity: 0,
-      avgAQI: 68,
-    };
-  }
-  const needsAttention = events.filter(e => e.needs_attention).length;
-  const avgRoughness = events.reduce((sum, e) => sum + e.roughness_index, 0) / totalEvents;
-  const avgImpactIntensity = events.reduce((sum, e) => sum + e.impact_intensity, 0) / totalEvents;
-  const avgTrafficDensity = events.reduce((sum, e) => sum + e.avg_vehicles_per_frame, 0) / totalEvents;
+  const totalPotholes = damage.reduce((sum, d) => sum + d.total_potholes, 0);
+  const totalCracks = damage.reduce((sum, d) => sum + d.total_cracks, 0);
   
   return {
+    totalCongestionCells: congestion.length,
+    totalDamageCells: damage.length,
+    highCongestionCount,
+    severeDamageCount,
+    avgVelocity,
+    avgRideComfort,
+    peakHourCells,
     totalEvents,
-    needsAttention,
-    avgRoughness: Math.round(avgRoughness * 10) / 10,
-    avgImpactIntensity: Math.round(avgImpactIntensity * 10) / 10,
-    avgTrafficDensity: Math.round(avgTrafficDensity * 10) / 10,
-    avgAQI: 68, // Mock AQI value
+    totalPotholes,
+    totalCracks,
   };
 };
 
-// Developer spec for backend teams
-export const API_SPEC = {
-  endpoints: {
-    getEvents: "GET /api/events?city=chandigarh&from=&to=",
-    getVideos: "GET /api/videos?city=chandigarh",
-    getVideoAnnotations: "GET /api/videos/{id}/annotations",
-    createReport: "POST /api/reports",
-  },
-  fieldMapping: {
-    location: ["lat_center", "lon_center"],
-    timestamp: "event_timestamp",
-    severity: ["pothole_confidence", "roughness_index", "impact_intensity"],
-    traffic: ["avg_vehicles_per_frame", "peak_vehicle_count"],
-    sensor: ["accel (ax, ay, az)", "gyro_intensity", "az_spike"],
-    metadata: ["sector", "street_name", "needs_attention", "validation_score"],
-  },
+// ============================================
+// Get Mock Data Response
+// ============================================
+export const getMockDataResponse = (): FetchDataResponse => {
+  return {
+    congestion: mockCongestionData,
+    damage: mockDamageData,
+    stats: calculateMockStats(mockCongestionData, mockDamageData),
+  };
 };
+
+// ============================================
+// Use Mock Data Flag (for development)
+// ============================================
+export const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';

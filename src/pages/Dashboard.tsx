@@ -30,20 +30,19 @@ import {
 import { DashboardMap } from "@/components/DashboardMap";
 import {
   fetchAllData,
-  getAvailableDates,
-  getTodayDateString,
+  fetchAvailableCities,
   getCongestionColor,
   getDamageColor,
-  getCongestionSeverity,
-  getDamageSeverity,
   filterCongestionByLevel,
   filterDamageByClassification,
 } from "@/lib/dynamodb";
+import { mockCities, getMockDataResponse, USE_MOCK_DATA } from "@/lib/mockData";
 import {
   CongestionItem,
   DamageItem,
   DashboardStats,
   DashboardFilters,
+  CityInfo,
   CONGESTION_LEVELS,
   PROPHET_CLASSIFICATIONS,
 } from "@/lib/types";
@@ -175,15 +174,37 @@ const Dashboard = () => {
   
   // Filter State
   const [filters, setFilters] = useState<DashboardFilters>({
-    date: getTodayDateString(),
+    city: 'mumbai', // Default city
     congestionLevel: 'all',
     prophetClassification: 'all',
     showCongestion: true,
     showDamage: true,
   });
 
-  // Available dates for dropdown
-  const availableDates = useMemo(() => getAvailableDates(), []);
+  // Available cities for dropdown
+  const [availableCities, setAvailableCities] = useState<CityInfo[]>([]);
+
+  // Load available cities on mount
+  useEffect(() => {
+    const loadCities = async () => {
+      if (USE_MOCK_DATA) {
+        setAvailableCities(mockCities);
+      } else {
+        const cities = await fetchAvailableCities();
+        if (cities.length > 0) {
+          setAvailableCities(cities);
+          // Set first city as default if current is not in list
+          if (!cities.find(c => c.name === filters.city)) {
+            setFilters(f => ({ ...f, city: cities[0].name }));
+          }
+        } else {
+          // Fallback to mock cities
+          setAvailableCities(mockCities);
+        }
+      }
+    };
+    loadCities();
+  }, []);
 
   // ============================================
   // Data Fetching
@@ -198,27 +219,11 @@ const Dashboard = () => {
       setError(null);
       setNotice(null);
 
-      const primaryDate = filters.date;
-      let data = await fetchAllData(primaryDate);
-      let usedDate = primaryDate;
-
-      // If no data on the selected date, fall back to earlier dates in the selector list
-      if (data.congestion.length === 0 && data.damage.length === 0) {
-        const fallbackDates = availableDates
-          .map((d) => d.value)
-          .filter((d) => d !== primaryDate);
-
-        for (const candidate of fallbackDates) {
-          const alt = await fetchAllData(candidate);
-          if (alt.congestion.length > 0 || alt.damage.length > 0) {
-            data = alt;
-            usedDate = candidate;
-            setNotice(`No data for ${primaryDate}; showing ${candidate} instead.`);
-            // Update the UI-selected date to the fallback so filters stay in sync
-            setFilters((f) => ({ ...f, date: candidate }));
-            break;
-          }
-        }
+      let data;
+      if (USE_MOCK_DATA) {
+        data = getMockDataResponse();
+      } else {
+        data = await fetchAllData(filters.city);
       }
       
       setCongestionData(data.congestion);
@@ -234,7 +239,7 @@ const Dashboard = () => {
       }
 
       if (data.congestion.length === 0 && data.damage.length === 0) {
-        setError(`No DynamoDB data found for ${usedDate} (and nearby dates).`);
+        setNotice(`No data available for ${filters.city}. Try another city.`);
       }
     } catch (err: any) {
       console.error('Failed to load data:', err);
@@ -243,12 +248,14 @@ const Dashboard = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filters.date]);
+  }, [filters.city]);
 
-  // Initial load and date change
+  // Initial load and city change
   useEffect(() => {
-    loadData();
-  }, [filters.date, loadData]);
+    if (filters.city) {
+      loadData();
+    }
+  }, [filters.city, loadData]);
 
   // ============================================
   // Filtered Data
@@ -267,28 +274,26 @@ const Dashboard = () => {
   // Chart Data
   // ============================================
   const congestionLevelDistribution = useMemo(() => {
-    const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+    const counts = { low: 0, medium: 0, high: 0 };
     congestionData.forEach(item => {
       counts[item.congestion_level as keyof typeof counts]++;
     });
     return [
       { name: 'Low', value: counts.low, color: '#22c55e' },
       { name: 'Medium', value: counts.medium, color: '#eab308' },
-      { name: 'High', value: counts.high, color: '#f97316' },
-      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+      { name: 'High', value: counts.high, color: '#ef4444' },
     ].filter(d => d.value > 0);
   }, [congestionData]);
 
   const damageClassificationDistribution = useMemo(() => {
-    const counts = { good: 0, moderate: 0, poor: 0, critical: 0 };
+    const counts = { good: 0, moderate: 0, severe: 0 };
     damageData.forEach(item => {
       counts[item.prophet_classification as keyof typeof counts]++;
     });
     return [
       { name: 'Good', value: counts.good, color: '#22c55e' },
       { name: 'Moderate', value: counts.moderate, color: '#eab308' },
-      { name: 'Poor', value: counts.poor, color: '#f97316' },
-      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+      { name: 'Severe', value: counts.severe, color: '#ef4444' },
     ].filter(d => d.value > 0);
   }, [damageData]);
 
@@ -334,22 +339,26 @@ const Dashboard = () => {
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold mb-2">Road Monitoring Dashboard</h1>
-              <p className="text-muted-foreground">Real-time data from DynamoDB • H3 Resolution 9</p>
+              <p className="text-muted-foreground">
+                Real-time data from DynamoDB • City: {filters.city.charAt(0).toUpperCase() + filters.city.slice(1)}
+              </p>
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
-              {/* Date Selector */}
+              {/* City Selector */}
               <Select
-                value={filters.date}
-                onValueChange={(value) => setFilters(f => ({ ...f, date: value }))}
+                value={filters.city}
+                onValueChange={(value) => setFilters(f => ({ ...f, city: value }))}
               >
                 <SelectTrigger className="w-48 glass-card">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Select date" />
+                  <MapPin className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Select city" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableDates.map(({ value, label }) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {availableCities.map((city) => (
+                    <SelectItem key={city.name} value={city.name}>
+                      {city.displayName}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -471,9 +480,9 @@ const Dashboard = () => {
                 <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-green-500/5 to-transparent border border-green-500/10">
                   <AnimatedGauge
                     value={stats?.avgRideComfort || 0}
-                    max={100}
+                    max={10}
                     label="Ride Comfort"
-                    sublabel="Score 0-100"
+                    sublabel="Score 0-10"
                     icon={ThermometerSun}
                     color="success"
                   />
@@ -482,7 +491,7 @@ const Dashboard = () => {
                 {/* Critical Areas */}
                 <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/10">
                   <AnimatedGauge
-                    value={(stats?.highCongestionCount || 0) + (stats?.criticalDamageCount || 0)}
+                    value={(stats?.highCongestionCount || 0) + (stats?.severeDamageCount || 0)}
                     max={50}
                     label="Critical Areas"
                     sublabel="Needs Attention"
@@ -617,8 +626,8 @@ const Dashboard = () => {
                     <span className="text-sm font-medium text-orange-500">{stats?.highCongestionCount || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">Critical Damage</span>
-                    <span className="text-sm font-medium text-red-500">{stats?.criticalDamageCount || 0}</span>
+                    <span className="text-xs text-muted-foreground">Severe Damage</span>
+                    <span className="text-sm font-medium text-red-500">{stats?.severeDamageCount || 0}</span>
                   </div>
                 </div>
               </CardContent>
@@ -807,32 +816,58 @@ const Dashboard = () => {
                     </div>
 
                     {/* Derived Metrics */}
+                    {selectedDamage.derived_metrics && (
                     <div className="space-y-2">
                       <div className="text-xs text-muted-foreground">Derived Metrics</div>
                       <SeverityMeter 
                         label="Roughness Index" 
                         value={selectedDamage.derived_metrics.roughness_index} 
-                        max={1} 
+                        max={5} 
                       />
                       <SeverityMeter 
                         label="Spike Index" 
                         value={selectedDamage.derived_metrics.spike_index} 
-                        max={1} 
+                        max={5} 
                       />
                       <SeverityMeter 
                         label="Jerk Magnitude" 
                         value={selectedDamage.derived_metrics.jerk_magnitude} 
-                        max={1} 
+                        max={10} 
                       />
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Ride Comfort</span>
                         <span className="font-mono font-medium text-green-500">
-                          {selectedDamage.derived_metrics.ride_comfort_score.toFixed(0)}/100
+                          {selectedDamage.derived_metrics.ride_comfort_score.toFixed(1)}/10
                         </span>
+                      </div>
+                    </div>
+                    )}
+
+                    {/* Damage Stats */}
+                    <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">Damage Statistics</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Potholes:</span>{' '}
+                          <span className="font-medium">{selectedDamage.total_potholes}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Cracks:</span>{' '}
+                          <span className="font-medium">{selectedDamage.total_cracks}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Severity:</span>{' '}
+                          <span className="font-medium">{selectedDamage.damage_severity_score.toFixed(0)}/100</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Damage Area:</span>{' '}
+                          <span className="font-medium">{selectedDamage.road_damage_area_avg.toFixed(1)}%</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Sensor Metrics */}
+                    {selectedDamage.sensor_metrics && (
                     <div className="pt-2 border-t border-border/50">
                       <div className="text-xs text-muted-foreground mb-2">Sensor Averages</div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -862,15 +897,16 @@ const Dashboard = () => {
                         </div>
                       </div>
                     </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <div className="text-xs text-muted-foreground">Damage Area</div>
-                        <div className="font-medium text-sm">{selectedDamage.road_damage_area_avg.toFixed(2)}</div>
-                      </div>
-                      <div>
                         <div className="text-xs text-muted-foreground">Events</div>
                         <div className="font-medium text-sm">{selectedDamage.event_count}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Frequency</div>
+                        <div className="font-medium text-sm">{selectedDamage.damage_frequency.toFixed(0)}%</div>
                       </div>
                     </div>
 

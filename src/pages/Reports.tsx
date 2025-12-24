@@ -10,7 +10,7 @@ import {
   BarChart3, 
   TrendingUp, 
   PieChart, 
-  Calendar, 
+  MapPin, 
   Clock, 
   Loader2,
   Car,
@@ -36,10 +36,10 @@ import {
 } from "recharts";
 import {
   fetchAllData,
-  getAvailableDates,
-  getTodayDateString,
+  fetchAvailableCities,
 } from "@/lib/dynamodb";
-import { CongestionItem, DamageItem, DashboardStats } from "@/lib/types";
+import { CongestionItem, DamageItem, DashboardStats, CityInfo } from "@/lib/types";
+import { mockCities, getMockDataResponse, USE_MOCK_DATA } from "@/lib/mockData";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -60,9 +60,28 @@ const Reports = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+  const [selectedCity, setSelectedCity] = useState('mumbai');
+  const [availableCities, setAvailableCities] = useState<CityInfo[]>([]);
 
-  const availableDates = useMemo(() => getAvailableDates(), []);
+  // Load available cities
+  useEffect(() => {
+    const loadCities = async () => {
+      if (USE_MOCK_DATA) {
+        setAvailableCities(mockCities);
+      } else {
+        const cities = await fetchAvailableCities();
+        if (cities.length > 0) {
+          setAvailableCities(cities);
+          if (!cities.find(c => c.name === selectedCity)) {
+            setSelectedCity(cities[0].name);
+          }
+        } else {
+          setAvailableCities(mockCities);
+        }
+      }
+    };
+    loadCities();
+  }, []);
 
   const loadData = async (showRefresh = false) => {
     try {
@@ -71,7 +90,14 @@ const Reports = () => {
       } else {
         setLoading(true);
       }
-      const data = await fetchAllData(selectedDate);
+      
+      let data;
+      if (USE_MOCK_DATA) {
+        data = getMockDataResponse();
+      } else {
+        data = await fetchAllData(selectedCity);
+      }
+      
       setCongestionData(data.congestion);
       setDamageData(data.damage);
       setStats(data.stats);
@@ -84,33 +110,33 @@ const Reports = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, [selectedDate]);
+    if (selectedCity) {
+      loadData();
+    }
+  }, [selectedCity]);
 
   // Chart data
   const congestionDistribution = useMemo(() => {
-    const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+    const counts = { low: 0, medium: 0, high: 0 };
     congestionData.forEach(item => {
       counts[item.congestion_level as keyof typeof counts]++;
     });
     return [
       { name: 'Low', value: counts.low, color: '#22c55e' },
       { name: 'Medium', value: counts.medium, color: '#eab308' },
-      { name: 'High', value: counts.high, color: '#f97316' },
-      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+      { name: 'High', value: counts.high, color: '#ef4444' },
     ];
   }, [congestionData]);
 
   const damageDistribution = useMemo(() => {
-    const counts = { good: 0, moderate: 0, poor: 0, critical: 0 };
+    const counts = { good: 0, moderate: 0, severe: 0 };
     damageData.forEach(item => {
       counts[item.prophet_classification as keyof typeof counts]++;
     });
     return [
       { name: 'Good', value: counts.good, color: '#22c55e' },
       { name: 'Moderate', value: counts.moderate, color: '#eab308' },
-      { name: 'Poor', value: counts.poor, color: '#f97316' },
-      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+      { name: 'Severe', value: counts.severe, color: '#ef4444' },
     ];
   }, [damageData]);
 
@@ -133,19 +159,19 @@ const Reports = () => {
   }, [congestionData]);
 
   const comfortScoreDistribution = useMemo(() => {
-    const ranges = { '0-25': 0, '26-50': 0, '51-75': 0, '76-100': 0 };
+    const ranges = { '0-2.5': 0, '2.5-5': 0, '5-7.5': 0, '7.5-10': 0 };
     damageData.forEach(item => {
-      const score = item.derived_metrics.ride_comfort_score;
-      if (score <= 25) ranges['0-25']++;
-      else if (score <= 50) ranges['26-50']++;
-      else if (score <= 75) ranges['51-75']++;
-      else ranges['76-100']++;
+      const score = item.derived_metrics?.ride_comfort_score || 5;
+      if (score <= 2.5) ranges['0-2.5']++;
+      else if (score <= 5) ranges['2.5-5']++;
+      else if (score <= 7.5) ranges['5-7.5']++;
+      else ranges['7.5-10']++;
     });
     return [
-      { name: '0-25', value: ranges['0-25'], color: '#ef4444' },
-      { name: '26-50', value: ranges['26-50'], color: '#f97316' },
-      { name: '51-75', value: ranges['51-75'], color: '#eab308' },
-      { name: '76-100', value: ranges['76-100'], color: '#22c55e' },
+      { name: '0-2.5 (Poor)', value: ranges['0-2.5'], color: '#ef4444' },
+      { name: '2.5-5', value: ranges['2.5-5'], color: '#f97316' },
+      { name: '5-7.5', value: ranges['5-7.5'], color: '#eab308' },
+      { name: '7.5-10 (Good)', value: ranges['7.5-10'], color: '#22c55e' },
     ];
   }, [damageData]);
 
