@@ -1,35 +1,56 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { Badge } from "@/components/ui/badge";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 import { 
   MapPin, 
   Activity, 
   AlertTriangle, 
   BarChart3,
-  Video,
   Download,
-  Users,
-  Play,
-  Pause,
   Calendar,
   Filter,
   Gauge,
   Zap,
   TrendingUp,
-  Cog,
   Loader2,
-  Car
+  Car,
+  RefreshCw,
+  Layers,
+  CircleDot,
+  ThermometerSun,
+  Route,
+  Clock,
+  Eye
 } from "lucide-react";
-import { mockEvents, calculateMetrics, mockVideos, Event } from "@/lib/mockData";
-import { fetchDashboardEvents, fetchDashboardVideos, processAllData, getProcessingStatus, getAnnotatedVideos, AnnotatedVideo } from "@/lib/api";
 import { DashboardMap } from "@/components/DashboardMap";
-import { AssignCrewDialog } from "@/components/AssignCrewDialog";
+import {
+  fetchAllData,
+  getAvailableDates,
+  getTodayDateString,
+  getCongestionColor,
+  getDamageColor,
+  getCongestionSeverity,
+  getDamageSeverity,
+  filterCongestionByLevel,
+  filterDamageByClassification,
+} from "@/lib/dynamodb";
+import {
+  CongestionItem,
+  DamageItem,
+  DashboardStats,
+  DashboardFilters,
+  CONGESTION_LEVELS,
+  PROPHET_CLASSIFICATIONS,
+} from "@/lib/types";
 
-// Custom gauge component for the top metrics (simplified, no heavy animations)
+// ============================================
+// Animated Gauge Component
+// ============================================
 const AnimatedGauge = ({ 
   value, 
   max, 
@@ -43,25 +64,18 @@ const AnimatedGauge = ({
   label: string;
   sublabel?: string;
   icon: React.ElementType;
-  color?: "primary" | "warning" | "danger";
+  color?: "primary" | "warning" | "danger" | "success";
 }) => {
   const percentage = Math.min((value / max) * 100, 100);
+  
   const getColor = () => {
-    if (color === "danger") return { stroke: "#ef4444", bg: "rgba(239, 68, 68, 0.1)", text: "text-red-500" };
-    if (color === "warning") return { stroke: "#f59e0b", bg: "rgba(245, 158, 11, 0.1)", text: "text-amber-500" };
-    return { stroke: "hsl(var(--primary))", bg: "hsl(var(--primary) / 0.1)", text: "text-primary" };
+    if (color === "danger") return { stroke: "#ef4444", text: "text-red-500" };
+    if (color === "warning") return { stroke: "#f59e0b", text: "text-amber-500" };
+    if (color === "success") return { stroke: "#22c55e", text: "text-green-500" };
+    return { stroke: "hsl(var(--primary))", text: "text-primary" };
   };
   
-  // For severity-based coloring (green to red)
-  const getSeverityColor = () => {
-    if (percentage < 33) return { stroke: "#22c55e", glow: "0 0 20px rgba(34, 197, 94, 0.4)" };
-    if (percentage < 66) return { stroke: "#f59e0b", glow: "0 0 20px rgba(245, 158, 11, 0.4)" };
-    return { stroke: "#ef4444", glow: "0 0 20px rgba(239, 68, 68, 0.4)" };
-  };
-  
-  const colorConfig = color === "primary" ? getColor() : getSeverityColor();
-  const strokeColor = "stroke" in colorConfig ? colorConfig.stroke : getColor().stroke;
-  
+  const colorConfig = getColor();
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
@@ -70,7 +84,6 @@ const AnimatedGauge = ({
     <div className="flex flex-col items-center">
       <div className="relative">
         <svg width="120" height="120" className="transform -rotate-90">
-          {/* Background circle */}
           <circle
             cx="60"
             cy="60"
@@ -80,28 +93,21 @@ const AnimatedGauge = ({
             strokeWidth="8"
             className="opacity-30"
           />
-          {/* Progress circle */}
           <circle
             cx="60"
             cy="60"
             r={radius}
             fill="none"
-            stroke={strokeColor}
+            stroke={colorConfig.stroke}
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
             className="transition-all duration-700 ease-out"
-            style={{ 
-              filter: `drop-shadow(${("glow" in colorConfig) ? colorConfig.glow : "0 0 10px hsl(var(--primary) / 0.4)"})`
-            }}
           />
         </svg>
-        {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div>
-            <Icon className={`w-5 h-5 mb-1 ${typeof value === 'number' && max <= 10 ? (percentage < 33 ? "text-green-500" : percentage < 66 ? "text-amber-500" : "text-red-500") : "text-primary"}`} />
-          </div>
+          <Icon className={`w-5 h-5 mb-1 ${colorConfig.text}`} />
           <span className="text-2xl font-bold">
             {typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value}
           </span>
@@ -115,8 +121,10 @@ const AnimatedGauge = ({
   );
 };
 
-// Small inline severity meter for event details
-const InlineSeverityMeter = ({ value, max, label }: { value: number; max: number; label: string }) => {
+// ============================================
+// Severity Meter Component
+// ============================================
+const SeverityMeter = ({ value, max, label }: { value: number; max: number; label: string }) => {
   const percentage = (value / max) * 100;
   const getColor = () => {
     if (percentage < 33) return "bg-green-500";
@@ -128,187 +136,266 @@ const InlineSeverityMeter = ({ value, max, label }: { value: number; max: number
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-mono font-medium">{value.toFixed(1)}/{max}</span>
+        <span className="font-mono font-medium">{value.toFixed(2)}</span>
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">
         <div 
           className={`h-full ${getColor()} rounded-full transition-all duration-500`}
-          style={{ width: `${percentage}%` }}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
         />
       </div>
     </div>
   );
 };
 
-// Map view mode type
-type MapViewMode = 'events' | 'heatmap' | 'traffic';
+// ============================================
+// Map View Mode Type
+// ============================================
+type MapViewMode = 'congestion' | 'damage' | 'combined';
 
+// ============================================
+// Main Dashboard Component
+// ============================================
 const Dashboard = () => {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [videos, setVideos] = useState<any[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // Data State
+  const [congestionData, setCongestionData] = useState<CongestionItem[]>([]);
+  const [damageData, setDamageData] = useState<DamageItem[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  
+  // UI State
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingMessage, setProcessingMessage] = useState<string | null>(null);
-  const [unprocessedCount, setUnprocessedCount] = useState<number>(0);
-  const [annotatedVideos, setAnnotatedVideos] = useState<AnnotatedVideo[]>([]);
-  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [mapViewMode, setMapViewMode] = useState<MapViewMode>('events');
-  const [assignCrewOpen, setAssignCrewOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mapViewMode, setMapViewMode] = useState<MapViewMode>('combined');
+  
+  // Selection State
+  const [selectedCongestion, setSelectedCongestion] = useState<CongestionItem | null>(null);
+  const [selectedDamage, setSelectedDamage] = useState<DamageItem | null>(null);
+  
+  // Filter State
+  const [filters, setFilters] = useState<DashboardFilters>({
+    date: getTodayDateString(),
+    congestionLevel: 'all',
+    prophetClassification: 'all',
+    showCongestion: true,
+    showDamage: true,
+  });
 
-  const fetchProcessingStatus = async () => {
-    const status = await getProcessingStatus();
-    setUnprocessedCount(status.unprocessed);
-  };
+  // Available dates for dropdown
+  const availableDates = useMemo(() => getAvailableDates(), []);
 
-  const handleProcessAll = async () => {
+  // ============================================
+  // Data Fetching
+  // ============================================
+  const loadData = useCallback(async (showRefreshIndicator = false) => {
     try {
-      setIsProcessing(true);
-      setProcessingMessage("Starting ML pipeline...");
-      const result = await processAllData();
-      setProcessingMessage(`Processing ${result.total_pairs} video(s) in background...`);
-      
-      // Clear message after 5 seconds
-      setTimeout(() => {
-        setProcessingMessage(null);
-        setIsProcessing(false);
-        fetchProcessingStatus(); // Refresh count
-      }, 5000);
-    } catch (error: any) {
-      setProcessingMessage(`Error: ${error.message}`);
-      setTimeout(() => {
-        setProcessingMessage(null);
-        setIsProcessing(false);
-      }, 3000);
-    }
-  };
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [fetchedEvents, fetchedVideos, fetchedAnnotatedVideos] = await Promise.all([
-          fetchDashboardEvents(),
-          fetchDashboardVideos(),
-          getAnnotatedVideos(5)
-        ]);
-        
-        // Always use mock events if API returns empty - ensures dummy data shows
-        const finalEvents = fetchedEvents.length > 0 ? fetchedEvents : mockEvents;
-        const finalVideos = fetchedVideos.length > 0 ? fetchedVideos : mockVideos;
-        
-        setEvents(finalEvents);
-        setVideos(finalVideos);
-        setAnnotatedVideos(fetchedAnnotatedVideos);
-        
-        // Set the first annotated video as selected if available
-        if (fetchedAnnotatedVideos.length > 0) {
-          setSelectedVideoUrl(fetchedAnnotatedVideos[0].url);
-        }
-        
-        // Fetch processing status
-        fetchProcessingStatus();
-        
-        if (finalEvents.length > 0) {
-          // Try to find an event that has a corresponding video
-          const eventWithVideo = finalEvents.find(event => {
-            const timestampStr = event.event_timestamp.replace(/:/g, '-').replace(' ', '_');
-            return finalVideos.some((v: any) => v.filename && v.filename.includes(timestampStr));
-          });
-          
-          setSelectedEvent(eventWithVideo || finalEvents[0]);
-        }
-      } catch (error) {
-        console.error("Failed to load dashboard data", error);
-        // Fallback to mock data if fetch fails
-        setEvents(mockEvents);
-        setVideos(mockVideos);
-        setSelectedEvent(mockEvents[0]);
-      } finally {
-        setLoading(false);
+      if (showRefreshIndicator) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-    };
+      setError(null);
 
+      const data = await fetchAllData(filters.date);
+      
+      setCongestionData(data.congestion);
+      setDamageData(data.damage);
+      setStats(data.stats);
+      
+      // Auto-select first items
+      if (data.congestion.length > 0 && !selectedCongestion) {
+        setSelectedCongestion(data.congestion[0]);
+      }
+      if (data.damage.length > 0 && !selectedDamage) {
+        setSelectedDamage(data.damage[0]);
+      }
+    } catch (err: any) {
+      console.error('Failed to load data:', err);
+      setError(err.message || 'Failed to load data from DynamoDB');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filters.date]);
+
+  // Initial load and date change
+  useEffect(() => {
     loadData();
-  }, []);
+  }, [filters.date, loadData]);
 
-  // Memoize metrics calculation to avoid recalculating on every render
-  const displayEvents = useMemo(() => events.length > 0 ? events : mockEvents, [events]);
-  const displayVideos = useMemo(() => videos.length > 0 ? videos : mockVideos, [videos]);
-  const metrics = useMemo(() => calculateMetrics(displayEvents), [displayEvents]);
-  const currentEvent = selectedEvent || displayEvents[0];
+  // ============================================
+  // Filtered Data
+  // ============================================
+  const filteredCongestion = useMemo(() => {
+    if (!filters.showCongestion) return [];
+    return filterCongestionByLevel(congestionData, filters.congestionLevel || 'all');
+  }, [congestionData, filters.congestionLevel, filters.showCongestion]);
 
+  const filteredDamage = useMemo(() => {
+    if (!filters.showDamage) return [];
+    return filterDamageByClassification(damageData, filters.prophetClassification || 'all');
+  }, [damageData, filters.prophetClassification, filters.showDamage]);
+
+  // ============================================
+  // Chart Data
+  // ============================================
+  const congestionLevelDistribution = useMemo(() => {
+    const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+    congestionData.forEach(item => {
+      counts[item.congestion_level as keyof typeof counts]++;
+    });
+    return [
+      { name: 'Low', value: counts.low, color: '#22c55e' },
+      { name: 'Medium', value: counts.medium, color: '#eab308' },
+      { name: 'High', value: counts.high, color: '#f97316' },
+      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+    ].filter(d => d.value > 0);
+  }, [congestionData]);
+
+  const damageClassificationDistribution = useMemo(() => {
+    const counts = { good: 0, moderate: 0, poor: 0, critical: 0 };
+    damageData.forEach(item => {
+      counts[item.prophet_classification as keyof typeof counts]++;
+    });
+    return [
+      { name: 'Good', value: counts.good, color: '#22c55e' },
+      { name: 'Moderate', value: counts.moderate, color: '#eab308' },
+      { name: 'Poor', value: counts.poor, color: '#f97316' },
+      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+    ].filter(d => d.value > 0);
+  }, [damageData]);
+
+  const vehicleCompositionData = useMemo(() => {
+    if (congestionData.length === 0) return [];
+    const totals = { light: 0, medium: 0, heavy: 0 };
+    congestionData.forEach(item => {
+      totals.light += item.vehicle_composition.light;
+      totals.medium += item.vehicle_composition.medium;
+      totals.heavy += item.vehicle_composition.heavy;
+    });
+    return [
+      { name: 'Light', value: totals.light, color: '#22c55e' },
+      { name: 'Medium', value: totals.medium, color: '#eab308' },
+      { name: 'Heavy', value: totals.heavy, color: '#ef4444' },
+    ].filter(d => d.value > 0);
+  }, [congestionData]);
+
+  // ============================================
+  // Loading State
+  // ============================================
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        <div className="text-center space-y-4">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading data from DynamoDB...</p>
+        </div>
       </div>
     );
   }
 
+  // ============================================
+  // Render
+  // ============================================
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
-      {/* Assign Crew Dialog */}
-      <AssignCrewDialog 
-        open={assignCrewOpen} 
-        onOpenChange={setAssignCrewOpen} 
-        event={currentEvent}
-      />
       
       {/* Header */}
       <div className="pt-20 pb-6 px-4 sm:px-6 lg:px-8 border-b border-border/50 glass-card">
         <div className="max-w-[2000px] mx-auto">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Chandigarh, Punjab</h1>
-              <p className="text-muted-foreground">Real-time road monitoring dashboard</p>
+              <h1 className="text-3xl font-bold mb-2">Road Monitoring Dashboard</h1>
+              <p className="text-muted-foreground">Real-time data from DynamoDB • H3 Resolution 9</p>
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
+              {/* Date Selector */}
+              <Select
+                value={filters.date}
+                onValueChange={(value) => setFilters(f => ({ ...f, date: value }))}
+              >
+                <SelectTrigger className="w-48 glass-card">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Select date" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDates.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Congestion Filter */}
+              <Select
+                value={filters.congestionLevel || 'all'}
+                onValueChange={(value) => setFilters(f => ({ ...f, congestionLevel: value as any }))}
+              >
+                <SelectTrigger className="w-40 glass-card">
+                  <Car className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Congestion" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Levels</SelectItem>
+                  {CONGESTION_LEVELS.map(level => (
+                    <SelectItem key={level} value={level}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getCongestionColor(level) }} />
+                        {level.charAt(0).toUpperCase() + level.slice(1)}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Damage Filter */}
+              <Select
+                value={filters.prophetClassification || 'all'}
+                onValueChange={(value) => setFilters(f => ({ ...f, prophetClassification: value as any }))}
+              >
+                <SelectTrigger className="w-40 glass-card">
+                  <Route className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Road Quality" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Quality</SelectItem>
+                  {PROPHET_CLASSIFICATIONS.map(classification => (
+                    <SelectItem key={classification} value={classification}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getDamageColor(classification) }} />
+                        {classification.charAt(0).toUpperCase() + classification.slice(1)}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Refresh Button */}
               <Button 
                 variant="outline" 
-                className="glass-card relative"
-                onClick={handleProcessAll}
-                disabled={isProcessing || unprocessedCount === 0}
+                className="glass-card"
+                onClick={() => loadData(true)}
+                disabled={refreshing}
               >
-                {isProcessing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Cog className="w-4 h-4 mr-2" />
-                )}
-                {isProcessing ? "Processing..." : "Process All"}
-                {unprocessedCount > 0 && !isProcessing && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {unprocessedCount}
-                  </span>
-                )}
+                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
               </Button>
-              <Button variant="outline" className="glass-card">
-                <Calendar className="w-4 h-4 mr-2" />
-                Last 24h
-              </Button>
-              <Button variant="outline" className="glass-card">
-                <Filter className="w-4 h-4 mr-2" />
-                Filters
-              </Button>
-              <Button variant="outline" className="glass-card">
-                {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                Time-lapse
-              </Button>
+
+              {/* Export Button */}
               <Button className="gradient-primary shadow-glow">
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>
             </div>
           </div>
-          {processingMessage && (
+
+          {/* Error Message */}
+          {error && (
             <div className="mt-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm">
-                {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                {processingMessage}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-500">
+                <AlertTriangle className="w-4 h-4" />
+                {error}
               </div>
             </div>
           )}
@@ -316,94 +403,57 @@ const Dashboard = () => {
       </div>
 
       <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Top Metrics Row - Three Key Indicators */}
+        {/* Top Metrics Row */}
         <div className="mb-6 animate-in fade-in duration-500">
           <Card className="glass-card shadow-card overflow-hidden">
             <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Total Events */}
-                <div 
-                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 hover:scale-[1.02] transition-transform"
-                >
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                {/* Total Cells */}
+                <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/10">
                   <AnimatedGauge
-                    value={metrics.totalEvents}
-                    max={1000}
-                    label="Total Events"
-                    sublabel="Last 24 hours"
-                    icon={TrendingUp}
+                    value={(stats?.totalCongestionCells || 0) + (stats?.totalDamageCells || 0)}
+                    max={100}
+                    label="Total Cells"
+                    sublabel="H3 Hex Zones"
+                    icon={Layers}
                     color="primary"
                   />
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-xs text-muted-foreground">Live tracking</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-green-500 font-medium">+12%</span> from yesterday
-                    </div>
-                  </div>
                 </div>
 
-                {/* Average Roughness */}
-                <div 
-                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10 hover:scale-[1.02] transition-transform"
-                >
+                {/* Average Velocity */}
+                <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/5 to-transparent border border-amber-500/10">
                   <AnimatedGauge
-                    value={metrics.avgRoughness}
-                    max={10}
-                    label="Avg Roughness"
-                    sublabel="Road Quality Index"
-                    icon={BarChart3}
+                    value={stats?.avgVelocity || 0}
+                    max={60}
+                    label="Avg Velocity"
+                    sublabel="km/h"
+                    icon={Gauge}
                     color="warning"
                   />
-                  <div className="flex-1 space-y-2">
-                    <div className="text-xs text-muted-foreground">
-                      Scale: 0 (smooth) - 10 (severe)
-                    </div>
-                    <div className="flex gap-1">
-                      {[...Array(10)].map((_, i) => (
-                        <div 
-                          key={i} 
-                          className={`h-1.5 flex-1 rounded-full ${
-                            i < metrics.avgRoughness 
-                              ? metrics.avgRoughness < 3.3 ? 'bg-green-500' : metrics.avgRoughness < 6.6 ? 'bg-amber-500' : 'bg-red-500'
-                              : 'bg-muted'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
-                {/* Average Impact */}
-                <div 
-                  className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/10 hover:scale-[1.02] transition-transform"
-                >
+                {/* Ride Comfort */}
+                <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-green-500/5 to-transparent border border-green-500/10">
                   <AnimatedGauge
-                    value={metrics.avgImpactIntensity}
-                    max={5}
-                    label="Avg Impact"
-                    sublabel="Intensity Level"
-                    icon={Zap}
+                    value={stats?.avgRideComfort || 0}
+                    max={100}
+                    label="Ride Comfort"
+                    sublabel="Score 0-100"
+                    icon={ThermometerSun}
+                    color="success"
+                  />
+                </div>
+
+                {/* Critical Areas */}
+                <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/10">
+                  <AnimatedGauge
+                    value={(stats?.highCongestionCount || 0) + (stats?.criticalDamageCount || 0)}
+                    max={50}
+                    label="Critical Areas"
+                    sublabel="Needs Attention"
+                    icon={AlertTriangle}
                     color="danger"
                   />
-                  <div className="flex-1 space-y-2">
-                    <div className="text-xs text-muted-foreground">
-                      Scale: 0 (low) - 5 (high)
-                    </div>
-                    <div className="flex gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <div 
-                          key={i} 
-                          className={`h-1.5 flex-1 rounded-full ${
-                            i < metrics.avgImpactIntensity 
-                              ? metrics.avgImpactIntensity < 1.7 ? 'bg-green-500' : metrics.avgImpactIntensity < 3.3 ? 'bg-amber-500' : 'bg-red-500'
-                              : 'bg-muted'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             </CardContent>
@@ -411,407 +461,413 @@ const Dashboard = () => {
         </div>
 
         <div className="grid lg:grid-cols-4 gap-6">
-          {/* Left: Secondary KPI Cards */}
+          {/* Left Column: Stats */}
           <div className="space-y-4">
-            <div className="animate-in slide-in-from-left duration-300">
-              <Card className="glass-card shadow-card border-l-4 border-l-urgent">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Needs Attention</span>
-                    <div className="animate-pulse">
-                      <AlertTriangle className="w-4 h-4 text-urgent" />
-                    </div>
-                  </div>
-                  <div className="text-3xl font-bold text-urgent mb-2">{metrics.needsAttention}</div>
-                  <Meter value={metrics.needsAttention} max={50} color="bg-urgent" />
-                  <div className="text-xs text-muted-foreground mt-2">Urgent fixes required</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="animate-in slide-in-from-left duration-300 delay-100">
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Traffic Density</span>
-                    <MapPin className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="text-3xl font-bold mb-2">{metrics.avgTrafficDensity}</div>
-                  <Meter value={metrics.avgTrafficDensity} max={20} color="bg-primary" />
-                  <div className="text-xs text-muted-foreground mt-2">Vehicles/frame</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="animate-in slide-in-from-left duration-300 delay-200">
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium">Quick Stats</span>
-                    <Gauge className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">Pothole Events</span>
-                      <span className="text-sm font-medium">{displayEvents.filter(e => e.pothole_confidence > 0.5).length}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">High Severity</span>
-                      <span className="text-sm font-medium text-red-500">{displayEvents.filter(e => e.roughness_index > 7).length}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">Resolved Today</span>
-                      <span className="text-sm font-medium text-green-500">12</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Center: Map and Video */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Map Section */}
-            <div className="animate-in fade-in duration-500">
-              <Card className="glass-card shadow-card h-full">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-primary" />
-                      Interactive Map
-                    </h2>
-                    <div className="flex gap-1 p-1 bg-muted rounded-lg">
-                      <Button 
-                        size="sm" 
-                        variant={mapViewMode === 'events' ? "default" : "ghost"} 
-                        className="text-xs h-7"
-                        onClick={() => setMapViewMode('events')}
-                      >
-                        📍 Events
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant={mapViewMode === 'heatmap' ? "default" : "ghost"} 
-                        className="text-xs h-7"
-                        onClick={() => setMapViewMode('heatmap')}
-                      >
-                        🔥 Heatmap
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant={mapViewMode === 'traffic' ? "default" : "ghost"} 
-                        className="text-xs h-7"
-                        onClick={() => setMapViewMode('traffic')}
-                      >
-                        <Car className="w-3 h-3 mr-1" />
-                        Traffic
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden">
-                    <DashboardMap 
-                      events={displayEvents} 
-                      selectedEvent={currentEvent} 
-                      onEventSelect={setSelectedEvent}
-                      showHeatmap={mapViewMode === 'heatmap'}
-                      showTraffic={mapViewMode === 'traffic'}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    {mapViewMode === 'heatmap' ? (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-green-500" />
-                          <span className="text-muted-foreground">Low Severity</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                          <span className="text-muted-foreground">Medium</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-red-500" />
-                          <span className="text-muted-foreground">High Severity</span>
-                        </div>
-                      </>
-                    ) : mapViewMode === 'traffic' ? (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-green-500" />
-                          <span className="text-muted-foreground">Light Traffic</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                          <span className="text-muted-foreground">Moderate</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-red-500" />
-                          <span className="text-muted-foreground">Heavy Traffic</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-urgent border-2 border-urgent" />
-                          <span className="text-muted-foreground">Urgent</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-primary border-2 border-primary" />
-                          <span className="text-muted-foreground">Normal</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-muted border-2 border-border" />
-                          <span className="text-muted-foreground">Resolved</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Video Section */}
-            <div className="animate-in fade-in duration-500 delay-100">
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                      <Video className="w-5 h-5 text-primary" />
-                      Annotated Video
-                    </h2>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Bounding Boxes
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Telemetry
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Video Selector Dropdown */}
-                  {annotatedVideos.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Select Video:</span>
-                      <Select
-                        value={selectedVideoUrl || ""}
-                        onValueChange={(url) => {
-                          setVideoError(null);
-                          setSelectedVideoUrl(url);
-                        }}
-                      >
-                        <SelectTrigger className="w-full max-w-md">
-                          <SelectValue placeholder="Select a video" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {annotatedVideos.map((video) => (
-                            <SelectItem key={video.filename} value={video.url}>
-                              {video.filename} ({video.size_mb} MB)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden flex items-center justify-center">
-                    {videoError ? (
-                      <div className="text-center space-y-4">
-                        <div className="w-20 h-20 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
-                          <AlertTriangle className="w-10 h-10 text-red-500" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-red-500">Video failed to load</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {videoError}
-                          </p>
-                        </div>
-                      </div>
-                    ) : selectedVideoUrl ? (
-                      <video 
-                        key={selectedVideoUrl}
-                        src={selectedVideoUrl} 
-                        controls 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const video = e.target as HTMLVideoElement;
-                          const selectedVideo = annotatedVideos.find(v => v.url === selectedVideoUrl);
-                          if (selectedVideo && selectedVideo.size_mb > 100) {
-                            setVideoError(`Video too large (${selectedVideo.size_mb} MB). Try downloading instead.`);
-                          } else {
-                            setVideoError("Failed to load video. The file may be corrupted or unavailable.");
-                          }
-                        }}
-                        onLoadStart={() => setVideoError(null)}
-                      />
-                    ) : currentEvent.video_url ? (
-                      <video 
-                        src={currentEvent.video_url} 
-                        controls 
-                        className="w-full h-full object-cover"
-                        onError={() => setVideoError("Failed to load video from event.")}
-                      />
-                    ) : (
-                      <div className="text-center space-y-4">
-                        <div className="w-20 h-20 mx-auto rounded-full gradient-primary animate-pulse-glow flex items-center justify-center">
-                          <Play className="w-10 h-10 text-white" />
-                        </div>
-                        <div>
-                          <p className="font-medium">No annotated videos available</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Process videos to generate annotated output
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Right: Event Details */}
-          <div className="space-y-4">
-            <div className="animate-in slide-in-from-right duration-300">
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Event Details</h3>
-                    {currentEvent.needs_attention && (
-                      <span className="px-2 py-1 rounded-full text-xs font-medium gradient-urgent text-urgent-foreground">
-                        Urgent
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Location</div>
-                      <div className="font-medium">{currentEvent.sector}</div>
-                      <div className="text-sm text-muted-foreground">{currentEvent.street_name}</div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Meter 
-                        label="Confidence" 
-                        value={currentEvent.pothole_confidence * 100} 
-                        max={100} 
-                        color="bg-primary" 
-                      />
-                      <InlineSeverityMeter 
-                        label="Roughness" 
-                        value={currentEvent.roughness_index} 
-                        max={10} 
-                      />
-                      <InlineSeverityMeter 
-                        label="Impact" 
-                        value={currentEvent.impact_intensity} 
-                        max={5} 
-                      />
-                      <Meter 
-                        label="Validation" 
-                        value={currentEvent.validation_score * 100} 
-                        max={100} 
-                        color="bg-green-500" 
-                      />
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Traffic</div>
-                      <div className="font-medium">
-                        {currentEvent.avg_vehicles_per_frame.toFixed(1)} avg / {currentEvent.peak_vehicle_count} peak
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">Timestamp</div>
-                      <div className="text-sm">
-                        {new Date(currentEvent.event_timestamp).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-border/50 space-y-2">
-                    <Button 
-                      className="w-full gradient-primary shadow-glow" 
-                      size="sm"
-                      onClick={() => setAssignCrewOpen(true)}
-                    >
-                      <Users className="w-4 h-4 mr-2" />
-                      Assign to Crew
-                    </Button>
-                    <Button variant="outline" className="w-full glass-card" size="sm">
-                      <Download className="w-4 h-4 mr-2" />
-                      Export Details
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="animate-in slide-in-from-right duration-300 delay-100">
-              <Card className="glass-card shadow-card">
-                <CardContent className="p-6 space-y-3">
-                  <h3 className="font-semibold text-sm">Sensor Telemetry</h3>
-                  <div className="h-48">
+            {/* Congestion Stats */}
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium flex items-center gap-2">
+                    <Car className="w-4 h-4 text-primary" />
+                    Congestion Overview
+                  </span>
+                  <Badge variant="outline">{congestionData.length} cells</Badge>
+                </div>
+                
+                {congestionLevelDistribution.length > 0 ? (
+                  <div className="h-32">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={[
-                          { name: 't-5', ax: currentEvent.accel.ax * 0.8, ay: currentEvent.accel.ay * 0.9, az: currentEvent.accel.az * 0.95 },
-                          { name: 't-4', ax: currentEvent.accel.ax * 1.1, ay: currentEvent.accel.ay * 0.7, az: currentEvent.accel.az * 1.02 },
-                          { name: 't-3', ax: currentEvent.accel.ax * 0.9, ay: currentEvent.accel.ay * 1.2, az: currentEvent.accel.az * 0.98 },
-                          { name: 't-2', ax: currentEvent.accel.ax * 1.3, ay: currentEvent.accel.ay * 0.85, az: currentEvent.accel.az * 1.05 },
-                          { name: 't-1', ax: currentEvent.accel.ax * 0.95, ay: currentEvent.accel.ay * 1.1, az: currentEvent.accel.az * 1.01 },
-                          { name: 'now', ax: currentEvent.accel.ax, ay: currentEvent.accel.ay, az: currentEvent.accel.az },
-                        ]}
-                        margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }} 
-                        />
-                        <Legend wrapperStyle={{ fontSize: '10px' }} />
-                        <Line type="monotone" dataKey="ax" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="Accel X" />
-                        <Line type="monotone" dataKey="ay" stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} name="Accel Y" />
-                        <Line type="monotone" dataKey="az" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} name="Accel Z" />
-                      </LineChart>
+                      <PieChart>
+                        <Pie
+                          data={congestionLevelDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={25}
+                          outerRadius={50}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {congestionLevelDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-muted-foreground">X: {currentEvent.accel.ax.toFixed(3)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                      <span className="text-muted-foreground">Y: {currentEvent.accel.ay.toFixed(3)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                      <span className="text-muted-foreground">Z: {currentEvent.accel.az.toFixed(3)}</span>
-                    </div>
+                ) : (
+                  <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
+                    No congestion data
                   </div>
-                  <div className="pt-2 border-t border-border/50 space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Gyro Intensity</span>
-                      <span className="font-mono">{currentEvent.gyro_intensity.toFixed(2)}</span>
+                )}
+                
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {congestionLevelDistribution.map(item => (
+                    <div key={item.name} className="flex items-center gap-2 text-xs">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span>{item.name}: {item.value}</span>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">AZ Spike</span>
-                      <span className="font-mono text-red-500">{currentEvent.az_spike.toFixed(2)}</span>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Damage Stats */}
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium flex items-center gap-2">
+                    <Route className="w-4 h-4 text-amber-500" />
+                    Road Quality
+                  </span>
+                  <Badge variant="outline">{damageData.length} cells</Badge>
+                </div>
+                
+                {damageClassificationDistribution.length > 0 ? (
+                  <div className="h-32">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={damageClassificationDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={25}
+                          outerRadius={50}
+                          paddingAngle={2}
+                          dataKey="value"
+                        >
+                          {damageClassificationDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
+                    No damage data
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {damageClassificationDistribution.map(item => (
+                    <div key={item.name} className="flex items-center gap-2 text-xs">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span>{item.name}: {item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats */}
+            <Card className="glass-card shadow-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Quick Stats</span>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Peak Hour Cells</span>
+                    <span className="text-sm font-medium">{stats?.peakHourCells || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Total Events</span>
+                    <span className="text-sm font-medium">{stats?.totalEvents || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">High Congestion</span>
+                    <span className="text-sm font-medium text-orange-500">{stats?.highCongestionCount || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Critical Damage</span>
+                    <span className="text-sm font-medium text-red-500">{stats?.criticalDamageCount || 0}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Center: Map */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="glass-card shadow-card h-full">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    H3 Hex Map
+                  </h2>
+                  <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                    <Button 
+                      size="sm" 
+                      variant={mapViewMode === 'combined' ? "default" : "ghost"} 
+                      className="text-xs h-7"
+                      onClick={() => setMapViewMode('combined')}
+                    >
+                      <Layers className="w-3 h-3 mr-1" />
+                      Combined
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant={mapViewMode === 'congestion' ? "default" : "ghost"} 
+                      className="text-xs h-7"
+                      onClick={() => setMapViewMode('congestion')}
+                    >
+                      <Car className="w-3 h-3 mr-1" />
+                      Traffic
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant={mapViewMode === 'damage' ? "default" : "ghost"} 
+                      className="text-xs h-7"
+                      onClick={() => setMapViewMode('damage')}
+                    >
+                      <Route className="w-3 h-3 mr-1" />
+                      Quality
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="aspect-video rounded-xl bg-muted/50 border-2 border-border/50 relative overflow-hidden">
+                  <DashboardMap
+                    congestionData={mapViewMode !== 'damage' ? filteredCongestion : []}
+                    damageData={mapViewMode !== 'congestion' ? filteredDamage : []}
+                    selectedCongestion={selectedCongestion}
+                    selectedDamage={selectedDamage}
+                    onCongestionSelect={setSelectedCongestion}
+                    onDamageSelect={setSelectedDamage}
+                  />
+                </div>
+
+                {/* Legend */}
+                <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="text-muted-foreground">Low / Good</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                    <span className="text-muted-foreground">Medium / Moderate</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500" />
+                    <span className="text-muted-foreground">High / Poor</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500" />
+                    <span className="text-muted-foreground">Critical</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: Details */}
+          <div className="space-y-4">
+            {/* Congestion Details */}
+            {selectedCongestion && (
+              <Card className="glass-card shadow-card">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Car className="w-4 h-4" />
+                      Congestion Details
+                    </h3>
+                    <Badge 
+                      style={{ backgroundColor: getCongestionColor(selectedCongestion.congestion_level) }}
+                      className="text-white"
+                    >
+                      {selectedCongestion.congestion_level}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Hex ID</div>
+                      <div className="font-mono text-xs bg-muted px-2 py-1 rounded truncate">
+                        {selectedCongestion.hex_id}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Road Name</div>
+                      <div className="font-medium">{selectedCongestion.road_name}</div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Avg Velocity</div>
+                        <div className="font-medium">{selectedCongestion.velocity_avg.toFixed(1)} km/h</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Avg Vehicles</div>
+                        <div className="font-medium">{selectedCongestion.vehicle_count_avg.toFixed(1)}</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Vehicle Composition</div>
+                      <div className="flex gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          L: {selectedCongestion.vehicle_composition.light}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          M: {selectedCongestion.vehicle_composition.medium}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          H: {selectedCongestion.vehicle_composition.heavy}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Peak Hour</div>
+                        <div className="font-medium">
+                          {selectedCongestion.peak_hour_flag ? '✅ Yes' : '❌ No'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Events</div>
+                        <div className="font-medium">{selectedCongestion.event_count}</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">Last Updated</div>
+                      <div className="text-xs">
+                        {new Date(selectedCongestion.last_updated).toLocaleString()}
+                      </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            )}
+
+            {/* Damage Details */}
+            {selectedDamage && (
+              <Card className="glass-card shadow-card">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Route className="w-4 h-4" />
+                      Road Quality Details
+                    </h3>
+                    <Badge 
+                      style={{ backgroundColor: getDamageColor(selectedDamage.prophet_classification) }}
+                      className="text-white"
+                    >
+                      {selectedDamage.prophet_classification}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Hex ID</div>
+                      <div className="font-mono text-xs bg-muted px-2 py-1 rounded truncate">
+                        {selectedDamage.hex_id}
+                      </div>
+                    </div>
+
+                    {/* Derived Metrics */}
+                    <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">Derived Metrics</div>
+                      <SeverityMeter 
+                        label="Roughness Index" 
+                        value={selectedDamage.derived_metrics.roughness_index} 
+                        max={1} 
+                      />
+                      <SeverityMeter 
+                        label="Spike Index" 
+                        value={selectedDamage.derived_metrics.spike_index} 
+                        max={1} 
+                      />
+                      <SeverityMeter 
+                        label="Jerk Magnitude" 
+                        value={selectedDamage.derived_metrics.jerk_magnitude} 
+                        max={1} 
+                      />
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Ride Comfort</span>
+                        <span className="font-mono font-medium text-green-500">
+                          {selectedDamage.derived_metrics.ride_comfort_score.toFixed(0)}/100
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Sensor Metrics */}
+                    <div className="pt-2 border-t border-border/50">
+                      <div className="text-xs text-muted-foreground mb-2">Sensor Averages</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Acc X:</span>{' '}
+                          <span className="font-mono">{selectedDamage.sensor_metrics.acc_x_avg.toFixed(3)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Gyro X:</span>{' '}
+                          <span className="font-mono">{selectedDamage.sensor_metrics.gyro_x_avg.toFixed(4)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Acc Y:</span>{' '}
+                          <span className="font-mono">{selectedDamage.sensor_metrics.acc_y_avg.toFixed(3)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Gyro Y:</span>{' '}
+                          <span className="font-mono">{selectedDamage.sensor_metrics.gyro_y_avg.toFixed(4)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Acc Z:</span>{' '}
+                          <span className="font-mono">{selectedDamage.sensor_metrics.acc_z_avg.toFixed(3)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Gyro Z:</span>{' '}
+                          <span className="font-mono">{selectedDamage.sensor_metrics.gyro_z_avg.toFixed(4)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Damage Area</div>
+                        <div className="font-medium text-sm">{selectedDamage.road_damage_area_avg.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Events</div>
+                        <div className="font-medium text-sm">{selectedDamage.event_count}</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">Last Updated</div>
+                      <div className="text-xs">
+                        {new Date(selectedDamage.last_updated).toLocaleString()}
+                      </div>
+                    </div>
+
+                    {selectedDamage.last_corporation_visit && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">Last Corp Visit</div>
+                        <div className="text-xs">
+                          {new Date(selectedDamage.last_corporation_visit).toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* No Selection State */}
+            {!selectedCongestion && !selectedDamage && (
+              <Card className="glass-card shadow-card">
+                <CardContent className="p-8 text-center">
+                  <Eye className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Select a hex cell on the map to view details</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

@@ -1,9 +1,21 @@
+/**
+ * @deprecated This file contains legacy API functions that called a backend server.
+ * The application now reads directly from DynamoDB using @/lib/dynamodb.ts
+ * These functions are kept for reference but should not be used.
+ * 
+ * New data source: AWS DynamoDB
+ * - road_congestion_YYYYMMDD - Traffic congestion data
+ * - road_damage_YYYYMMDD - Road quality/damage data
+ * 
+ * @see src/lib/dynamodb.ts for the new data fetching logic
+ * @see src/lib/types.ts for TypeScript interfaces
+ */
+
 import { Event } from "./mockData";
 
-// Remove trailing slash if present
+// DEPRECATED: Legacy backend URL (no longer used)
 const rawUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "";
 const API_BASE_URL = rawUrl.replace(/\/$/, "");
-// Example: VITE_API_URL="https://your-ngrok-url"
 
 export const fetchDashboardEvents = async (): Promise<Event[]> => {
   try {

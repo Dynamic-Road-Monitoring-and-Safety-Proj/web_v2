@@ -1,16 +1,51 @@
+import { useState, useEffect, useMemo } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Filter, BarChart3, TrendingUp, PieChart, Calendar, Clock } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { 
+  FileText, 
+  Download, 
+  BarChart3, 
+  TrendingUp, 
+  PieChart, 
+  Calendar, 
+  Clock, 
+  Loader2,
+  Car,
+  Route,
+  RefreshCw,
+  Database
+} from "lucide-react";
 import { motion } from "framer-motion";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart as RechartsPie,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  Legend
+} from "recharts";
+import {
+  fetchAllData,
+  getAvailableDates,
+  getTodayDateString,
+} from "@/lib/dynamodb";
+import { CongestionItem, DamageItem, DashboardStats } from "@/lib/types";
 
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
+    transition: { staggerChildren: 0.1 }
   }
 };
 
@@ -19,58 +54,156 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
 };
 
-const reports = [
-  { 
-    title: "Monthly Road Quality Assessment", 
-    icon: BarChart3, 
-    color: "text-blue-500",
-    date: "Nov 26, 2025",
-    size: "2.4 MB",
-    status: "Ready"
-  },
-  { 
-    title: "Traffic Congestion Analysis", 
-    icon: TrendingUp, 
-    color: "text-orange-500",
-    date: "Nov 25, 2025",
-    size: "1.8 MB",
-    status: "Ready"
-  },
-  { 
-    title: "Pothole Repair Efficiency", 
-    icon: PieChart, 
-    color: "text-green-500",
-    date: "Nov 24, 2025",
-    size: "3.1 MB",
-    status: "Ready"
-  },
-  { 
-    title: "Accident Hotspots Report", 
-    icon: FileText, 
-    color: "text-red-500",
-    date: "Nov 23, 2025",
-    size: "4.2 MB",
-    status: "Ready"
-  },
-  { 
-    title: "Infrastructure Maintenance Log", 
-    icon: Calendar, 
-    color: "text-purple-500",
-    date: "Nov 22, 2025",
-    size: "1.5 MB",
-    status: "Processing"
-  },
-  { 
-    title: "City-wide Drivability Score", 
-    icon: TrendingUp, 
-    color: "text-cyan-500",
-    date: "Nov 21, 2025",
-    size: "2.9 MB",
-    status: "Ready"
-  }
-];
-
 const Reports = () => {
+  const [congestionData, setCongestionData] = useState<CongestionItem[]>([]);
+  const [damageData, setDamageData] = useState<DamageItem[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+
+  const availableDates = useMemo(() => getAvailableDates(), []);
+
+  const loadData = async (showRefresh = false) => {
+    try {
+      if (showRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      const data = await fetchAllData(selectedDate);
+      setCongestionData(data.congestion);
+      setDamageData(data.damage);
+      setStats(data.stats);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [selectedDate]);
+
+  // Chart data
+  const congestionDistribution = useMemo(() => {
+    const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+    congestionData.forEach(item => {
+      counts[item.congestion_level as keyof typeof counts]++;
+    });
+    return [
+      { name: 'Low', value: counts.low, color: '#22c55e' },
+      { name: 'Medium', value: counts.medium, color: '#eab308' },
+      { name: 'High', value: counts.high, color: '#f97316' },
+      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+    ];
+  }, [congestionData]);
+
+  const damageDistribution = useMemo(() => {
+    const counts = { good: 0, moderate: 0, poor: 0, critical: 0 };
+    damageData.forEach(item => {
+      counts[item.prophet_classification as keyof typeof counts]++;
+    });
+    return [
+      { name: 'Good', value: counts.good, color: '#22c55e' },
+      { name: 'Moderate', value: counts.moderate, color: '#eab308' },
+      { name: 'Poor', value: counts.poor, color: '#f97316' },
+      { name: 'Critical', value: counts.critical, color: '#ef4444' },
+    ];
+  }, [damageData]);
+
+  const velocityByRoad = useMemo(() => {
+    const roadData: { [key: string]: { total: number; count: number } } = {};
+    congestionData.forEach(item => {
+      const road = item.road_name || 'Unknown';
+      if (!roadData[road]) {
+        roadData[road] = { total: 0, count: 0 };
+      }
+      roadData[road].total += item.velocity_avg;
+      roadData[road].count++;
+    });
+    return Object.entries(roadData)
+      .map(([name, data]) => ({
+        name: name.length > 15 ? name.slice(0, 15) + '...' : name,
+        velocity: data.total / data.count,
+      }))
+      .slice(0, 8);
+  }, [congestionData]);
+
+  const comfortScoreDistribution = useMemo(() => {
+    const ranges = { '0-25': 0, '26-50': 0, '51-75': 0, '76-100': 0 };
+    damageData.forEach(item => {
+      const score = item.derived_metrics.ride_comfort_score;
+      if (score <= 25) ranges['0-25']++;
+      else if (score <= 50) ranges['26-50']++;
+      else if (score <= 75) ranges['51-75']++;
+      else ranges['76-100']++;
+    });
+    return [
+      { name: '0-25', value: ranges['0-25'], color: '#ef4444' },
+      { name: '26-50', value: ranges['26-50'], color: '#f97316' },
+      { name: '51-75', value: ranges['51-75'], color: '#eab308' },
+      { name: '76-100', value: ranges['76-100'], color: '#22c55e' },
+    ];
+  }, [damageData]);
+
+  // Export data as JSON
+  const handleExport = () => {
+    const exportData = {
+      date: selectedDate,
+      exportedAt: new Date().toISOString(),
+      stats,
+      congestion: congestionData,
+      damage: damageData,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `road_report_${selectedDate}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Export as CSV
+  const handleExportCSV = (type: 'congestion' | 'damage') => {
+    let csv = '';
+    if (type === 'congestion') {
+      csv = 'hex_id,road_name,congestion_level,velocity_avg,vehicle_count_avg,peak_hour,event_count,lat,lon,last_updated\n';
+      congestionData.forEach(item => {
+        csv += `${item.hex_id},${item.road_name},${item.congestion_level},${item.velocity_avg},${item.vehicle_count_avg},${item.peak_hour_flag},${item.event_count},${item.location.lat},${item.location.lon},${item.last_updated}\n`;
+      });
+    } else {
+      csv = 'hex_id,prophet_classification,ride_comfort_score,roughness_index,spike_index,damage_area,event_count,lat,lon,last_updated\n';
+      damageData.forEach(item => {
+        csv += `${item.hex_id},${item.prophet_classification},${item.derived_metrics.ride_comfort_score},${item.derived_metrics.roughness_index},${item.derived_metrics.spike_index},${item.road_damage_area_avg},${item.event_count},${item.location.lat},${item.location.lon},${item.last_updated}\n`;
+      });
+    }
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type}_report_${selectedDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="pt-24 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+            <p className="text-muted-foreground">Loading report data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -85,23 +218,31 @@ const Reports = () => {
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
               Reports & Analytics
             </h1>
-            <p className="text-muted-foreground">Generate and download detailed city infrastructure reports</p>
+            <p className="text-muted-foreground">Data from DynamoDB • Date: {selectedDate}</p>
           </div>
-          <motion.div 
-            className="flex gap-2"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Button variant="outline" className="group">
-              <Filter className="w-4 h-4 mr-2 group-hover:rotate-180 transition-transform duration-300" />
-              Filter
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Date Selector */}
+            <Select value={selectedDate} onValueChange={setSelectedDate}>
+              <SelectTrigger className="w-48">
+                <Calendar className="w-4 h-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableDates.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" onClick={() => loadData(true)} disabled={refreshing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
-            <Button className="gradient-primary group">
-              <Download className="w-4 h-4 mr-2 group-hover:translate-y-0.5 transition-transform" />
+            <Button className="gradient-primary" onClick={handleExport}>
+              <Download className="w-4 h-4 mr-2" />
               Export All
             </Button>
-          </motion.div>
+          </div>
         </motion.div>
 
         {/* Stats Summary */}
@@ -112,10 +253,10 @@ const Reports = () => {
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           {[
-            { label: "Total Reports", value: "156", icon: FileText },
-            { label: "This Month", value: "24", icon: Calendar },
-            { label: "Downloads", value: "1.2K", icon: Download },
-            { label: "Avg. Gen Time", value: "2.3s", icon: Clock }
+            { label: "Congestion Cells", value: stats?.totalCongestionCells || 0, icon: Car },
+            { label: "Damage Cells", value: stats?.totalDamageCells || 0, icon: Route },
+            { label: "Total Events", value: stats?.totalEvents || 0, icon: Database },
+            { label: "Avg Comfort", value: `${stats?.avgRideComfort.toFixed(0) || 0}/100`, icon: TrendingUp }
           ].map((stat, i) => (
             <motion.div
               key={i}
@@ -135,97 +276,217 @@ const Reports = () => {
           ))}
         </motion.div>
 
+        {/* Charts Grid */}
         <motion.div 
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid md:grid-cols-2 gap-6 mb-8"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
         >
-          {reports.map((report, i) => {
-            const Icon = report.icon;
-            return (
-              <motion.div
-                key={i}
-                variants={itemVariants}
-                whileHover={{ scale: 1.02, y: -5 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Card className="glass-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 group cursor-pointer h-full overflow-hidden relative">
-                  {/* Animated background gradient on hover */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  
-                  <CardHeader className="relative">
-                    <CardTitle className="flex items-start justify-between">
-                      <span className="text-lg pr-4">{report.title}</span>
-                      <motion.div
-                        whileHover={{ rotate: 360 }}
-                        transition={{ duration: 0.5 }}
+          {/* Congestion Distribution */}
+          <motion.div variants={itemVariants}>
+            <Card className="glass-card">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Car className="w-5 h-5" />
+                  Traffic Congestion
+                </CardTitle>
+                <Button size="sm" variant="outline" onClick={() => handleExportCSV('congestion')}>
+                  <Download className="w-3 h-3 mr-1" />
+                  CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPie>
+                      <Pie
+                        data={congestionDistribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}`}
                       >
-                        <Icon className={`w-6 h-6 ${report.color} transition-colors`} />
-                      </motion.div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Comprehensive analysis of data collected over the last 30 days.
-                    </p>
-                    <div className="flex items-center justify-between text-sm mb-3">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {report.date}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${
-                        report.status === 'Ready' 
-                          ? 'bg-green-500/10 text-green-500' 
-                          : 'bg-yellow-500/10 text-yellow-500'
-                      }`}>
-                        {report.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm pt-3 border-t border-border/50">
-                      <span className="text-muted-foreground">{report.size}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-primary hover:text-primary/80 group/btn"
-                        disabled={report.status !== 'Ready'}
+                        {congestionDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </RechartsPie>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Road Quality Distribution */}
+          <motion.div variants={itemVariants}>
+            <Card className="glass-card">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Route className="w-5 h-5" />
+                  Road Quality
+                </CardTitle>
+                <Button size="sm" variant="outline" onClick={() => handleExportCSV('damage')}>
+                  <Download className="w-3 h-3 mr-1" />
+                  CSV
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPie>
+                      <Pie
+                        data={damageDistribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}`}
                       >
-                        <Download className="w-4 h-4 mr-1 group-hover/btn:animate-bounce" />
-                        Download
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })}
+                        {damageDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </RechartsPie>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Velocity by Road */}
+          <motion.div variants={itemVariants}>
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Average Velocity by Road
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={velocityByRoad} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" unit=" km/h" />
+                      <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="velocity" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Comfort Score Distribution */}
+          <motion.div variants={itemVariants}>
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Ride Comfort Scores
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={comfortScoreDistribution}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        {comfortScoreDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </motion.div>
 
-        {/* Generate New Report Section */}
+        {/* Data Tables Summary */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.8 }}
-          className="mt-12"
+          className="grid md:grid-cols-2 gap-6"
         >
-          <Card className="glass-card border-dashed border-2 border-primary/30 hover:border-primary/60 transition-colors group">
-            <CardContent className="p-8 text-center">
-              <motion.div
-                whileHover={{ scale: 1.1, rotate: 180 }}
-                transition={{ duration: 0.5 }}
-                className="inline-block mb-4"
-              >
-                <div className="p-4 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                  <FileText className="w-8 h-8 text-primary" />
-                </div>
-              </motion.div>
-              <h3 className="text-xl font-semibold mb-2">Generate Custom Report</h3>
-              <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-                Create a tailored report with specific date ranges, metrics, and visualization options.
-              </p>
-              <Button className="gradient-primary">
-                Create New Report
-              </Button>
+          {/* Top Congested Areas */}
+          <Card className="glass-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Top Congested Areas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {congestionData
+                  .filter(c => c.congestion_level === 'critical' || c.congestion_level === 'high')
+                  .slice(0, 5)
+                  .map((item, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium text-sm">{item.road_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.velocity_avg.toFixed(1)} km/h • {item.vehicle_count_avg.toFixed(0)} vehicles
+                        </p>
+                      </div>
+                      <Badge 
+                        variant={item.congestion_level === 'critical' ? 'destructive' : 'secondary'}
+                        className={item.congestion_level === 'high' ? 'bg-orange-500' : ''}
+                      >
+                        {item.congestion_level}
+                      </Badge>
+                    </div>
+                  ))}
+                {congestionData.filter(c => c.congestion_level === 'critical' || c.congestion_level === 'high').length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-4">No critical congestion areas</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Critical Road Damage */}
+          <Card className="glass-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Critical Road Damage</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {damageData
+                  .filter(d => d.prophet_classification === 'critical' || d.prophet_classification === 'poor')
+                  .slice(0, 5)
+                  .map((item, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium text-sm font-mono">{item.hex_id.slice(0, 12)}...</p>
+                        <p className="text-xs text-muted-foreground">
+                          Comfort: {item.derived_metrics.ride_comfort_score.toFixed(0)}/100 • 
+                          Roughness: {item.derived_metrics.roughness_index.toFixed(3)}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant={item.prophet_classification === 'critical' ? 'destructive' : 'secondary'}
+                        className={item.prophet_classification === 'poor' ? 'bg-orange-500' : ''}
+                      >
+                        {item.prophet_classification}
+                      </Badge>
+                    </div>
+                  ))}
+                {damageData.filter(d => d.prophet_classification === 'critical' || d.prophet_classification === 'poor').length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-4">No critical damage areas</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </motion.div>

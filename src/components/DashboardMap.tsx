@@ -1,299 +1,375 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Rectangle, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Popup, useMap, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Event } from '@/lib/mockData';
-import { TileData, fetchTilesInViewport, getSeverityColor } from '@/lib/api';
+import { CongestionItem, DamageItem } from '@/lib/types';
+import { getCongestionColor, getDamageColor } from '@/lib/dynamodb';
 
 interface DashboardMapProps {
-  events: Event[];
-  selectedEvent: Event | null;
-  onEventSelect: (event: Event) => void;
-  showHeatmap?: boolean;
-  showTraffic?: boolean;
+  congestionData: CongestionItem[];
+  damageData: DamageItem[];
+  selectedCongestion: CongestionItem | null;
+  selectedDamage: DamageItem | null;
+  onCongestionSelect: (item: CongestionItem) => void;
+  onDamageSelect: (item: DamageItem) => void;
 }
 
-// Constants for tile size (1km grid)
-const KM_TO_DEG_LAT = 0.009;
+// Default center: Chandigarh, Punjab
+const DEFAULT_CENTER: [number, number] = [30.7333, 76.7794];
 
-function MapUpdater({ center }: { center: [number, number] }) {
+// H3 Hex boundary cache for performance
+const hexBoundaryCache = new Map<string, [number, number][]>();
+
+/**
+ * Get H3 hex boundary coordinates
+ * Falls back to approximate circle if h3-js fails
+ */
+const getHexBoundary = async (hexId: string, centerLat: number, centerLon: number): Promise<[number, number][]> => {
+  // Check cache first
+  if (hexBoundaryCache.has(hexId)) {
+    return hexBoundaryCache.get(hexId)!;
+  }
+
+  try {
+    const h3 = await import('h3-js');
+    if (h3.isValidCell(hexId)) {
+      const boundary = h3.cellToBoundary(hexId);
+      hexBoundaryCache.set(hexId, boundary);
+      return boundary;
+    }
+  } catch (error) {
+    console.warn('H3 boundary lookup failed for', hexId, error);
+  }
+
+  // Fallback: Create approximate hexagon around center point
+  // H3 res 9 edge length is ~174m, use ~0.002 degrees
+  const radius = 0.002;
+  const boundary: [number, number][] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 6;
+    boundary.push([
+      centerLat + radius * Math.cos(angle),
+      centerLon + radius * Math.sin(angle) / Math.cos(centerLat * Math.PI / 180),
+    ]);
+  }
+  hexBoundaryCache.set(hexId, boundary);
+  return boundary;
+};
+
+/**
+ * Map updater component to handle center changes
+ */
+function MapUpdater({ center, zoom }: { center: [number, number]; zoom?: number }) {
   const map = useMap();
-  
+
   useEffect(() => {
-    map.setView(center, 13);
-    // Force a resize calculation after mount to ensure tiles render
+    map.setView(center, zoom || map.getZoom());
     const timer = setTimeout(() => {
       map.invalidateSize();
     }, 100);
     return () => clearTimeout(timer);
-  }, [center, map]);
+  }, [center, zoom, map]);
 
   return null;
 }
 
-interface HeatmapLayerProps {
-  onBoundsChange: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => void;
-  tiles: TileData[];
-}
+/**
+ * Congestion Hex Layer Component
+ */
+function CongestionHexLayer({
+  data,
+  selected,
+  onSelect,
+}: {
+  data: CongestionItem[];
+  selected: CongestionItem | null;
+  onSelect: (item: CongestionItem) => void;
+}) {
+  const [boundaries, setBoundaries] = useState<Map<string, [number, number][]>>(new Map());
 
-function HeatmapLayer({ tiles }: { tiles: TileData[] }) {
-  return (
-    <>
-      {tiles.map((tile) => {
-        // Parse tile ID to get indices
-        const parts = tile.tile_id.split('_');
-        const tileLatIdx = parseInt(parts[1]);
-        const tileLonIdx = parseInt(parts[2]);
-        
-        // Calculate tile bounds
-        const minLat = tileLatIdx * KM_TO_DEG_LAT;
-        const maxLat = (tileLatIdx + 1) * KM_TO_DEG_LAT;
-        
-        // Adjust longitude conversion for latitude
-        const centerLat = (minLat + maxLat) / 2;
-        const kmToDegLon = KM_TO_DEG_LAT / Math.max(Math.cos(centerLat * Math.PI / 180), 0.01);
-        const minLon = tileLonIdx * kmToDegLon;
-        const maxLon = (tileLonIdx + 1) * kmToDegLon;
-
-        const bounds: [[number, number], [number, number]] = [
-          [minLat, minLon],
-          [maxLat, maxLon]
-        ];
-
-        const severity = tile.max_severity || tile.avg_severity || 0;
-        const fillColor = getSeverityColor(severity);
-        const fillOpacity = Math.min(0.3 + (severity / 100) * 0.4, 0.7);
-
-        return (
-          <Rectangle
-            key={tile.tile_id}
-            bounds={bounds}
-            pathOptions={{
-              color: fillColor,
-              fillColor: fillColor,
-              fillOpacity: fillOpacity,
-              weight: 1,
-              opacity: 0.7
-            }}
-          >
-            <Popup>
-              <div className="min-w-[180px] p-1">
-                <div className="font-bold text-sm mb-2">Tile: {tile.tile_id}</div>
-                <div className="grid grid-cols-2 gap-1 text-xs">
-                  <div>🕳️ Potholes: <strong>{tile.pothole_count}</strong></div>
-                  <div>🚗 Congestion: <strong>{tile.congestion_count}</strong></div>
-                  <div className="col-span-2">📊 Avg Severity: <strong>{tile.avg_severity.toFixed(1)}</strong></div>
-                  <div className="col-span-2">⚠️ Max Severity: <strong>{tile.max_severity.toFixed(1)}</strong></div>
-                  <div className="col-span-2">📍 Total Events: <strong>{tile.total_events}</strong></div>
-                </div>
-              </div>
-            </Popup>
-          </Rectangle>
-        );
-      })}
-    </>
-  );
-}
-
-// Traffic layer showing congestion based on event density
-function TrafficLayer({ events }: { events: Event[] }) {
-  // Group events by rough location (0.008 degree ~= 0.8km grid)
-  const trafficData = useMemo(() => {
-    const grid: { [key: string]: { lat: number; lon: number; count: number; avgVehicles: number } } = {};
-    
-    events.forEach(event => {
-      const gridLat = Math.floor(event.lat_center / 0.008) * 0.008;
-      const gridLon = Math.floor(event.lon_center / 0.008) * 0.008;
-      const key = `${gridLat}_${gridLon}`;
-      
-      if (!grid[key]) {
-        grid[key] = { lat: gridLat + 0.004, lon: gridLon + 0.004, count: 0, avgVehicles: 0 };
+  useEffect(() => {
+    const loadBoundaries = async () => {
+      const newBoundaries = new Map<string, [number, number][]>();
+      for (const item of data) {
+        const boundary = await getHexBoundary(item.hex_id, item.location.lat, item.location.lon);
+        newBoundaries.set(item.hex_id, boundary);
       }
-      grid[key].count++;
-      grid[key].avgVehicles += event.avg_vehicles_per_frame || 0;
-    });
-    
-    // Calculate average vehicles
-    Object.values(grid).forEach(cell => {
-      cell.avgVehicles = cell.avgVehicles / cell.count;
-    });
-    
-    return Object.values(grid);
-  }, [events]);
-
-  const getTrafficColor = (avgVehicles: number) => {
-    if (avgVehicles < 5) return '#22c55e'; // Green - light traffic
-    if (avgVehicles < 10) return '#eab308'; // Yellow - moderate
-    return '#ef4444'; // Red - heavy traffic
-  };
+      setBoundaries(newBoundaries);
+    };
+    loadBoundaries();
+  }, [data]);
 
   return (
     <>
-      {trafficData.map((cell, idx) => {
-        const bounds: [[number, number], [number, number]] = [
-          [cell.lat - 0.004, cell.lon - 0.004],
-          [cell.lat + 0.004, cell.lon + 0.004]
-        ];
-        
-        const color = getTrafficColor(cell.avgVehicles);
-        const opacity = Math.min(0.3 + (cell.avgVehicles / 20) * 0.4, 0.7);
+      {data.map((item) => {
+        const boundary = boundaries.get(item.hex_id);
+        if (!boundary || boundary.length === 0) return null;
+
+        const color = getCongestionColor(item.congestion_level);
+        const isSelected = selected?.hex_id === item.hex_id;
 
         return (
-          <Rectangle
-            key={`traffic_${idx}`}
-            bounds={bounds}
+          <Polygon
+            key={`congestion-${item.hex_id}`}
+            positions={boundary}
             pathOptions={{
-              color: color,
+              color: isSelected ? '#ffffff' : color,
               fillColor: color,
-              fillOpacity: opacity,
-              weight: 1,
-              opacity: 0.6
+              fillOpacity: isSelected ? 0.8 : 0.5,
+              weight: isSelected ? 3 : 1,
+            }}
+            eventHandlers={{
+              click: () => onSelect(item),
             }}
           >
             <Popup>
-              <div className="min-w-[150px] p-1">
-                <div className="font-bold text-sm mb-2">Traffic Zone</div>
+              <div className="min-w-[200px] p-2">
+                <div className="font-bold text-sm mb-2 flex items-center gap-2">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  Traffic: {item.congestion_level.toUpperCase()}
+                </div>
                 <div className="text-xs space-y-1">
-                  <div>🚗 Avg Vehicles: <strong>{cell.avgVehicles.toFixed(1)}</strong></div>
-                  <div>📍 Events: <strong>{cell.count}</strong></div>
-                  <div>📊 Density: <strong>{cell.avgVehicles < 5 ? 'Light' : cell.avgVehicles < 10 ? 'Moderate' : 'Heavy'}</strong></div>
+                  <div>🛣️ Road: <strong>{item.road_name}</strong></div>
+                  <div>🚗 Velocity: <strong>{item.velocity_avg.toFixed(1)} km/h</strong></div>
+                  <div>📊 Vehicles: <strong>{item.vehicle_count_avg.toFixed(1)}</strong></div>
+                  <div>⏰ Peak Hour: <strong>{item.peak_hour_flag ? 'Yes' : 'No'}</strong></div>
+                  <div>📍 Events: <strong>{item.event_count}</strong></div>
+                </div>
+                <div className="text-xs text-gray-500 mt-2 pt-2 border-t">
+                  Hex: {item.hex_id.slice(0, 12)}...
                 </div>
               </div>
             </Popup>
-          </Rectangle>
+          </Polygon>
         );
       })}
     </>
   );
 }
 
-function BoundsWatcher({ onBoundsChange }: { onBoundsChange: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => void }) {
-  const map = useMapEvents({
-    moveend: () => {
-      const bounds = map.getBounds();
-      onBoundsChange({
-        minLat: bounds.getSouth(),
-        maxLat: bounds.getNorth(),
-        minLon: bounds.getWest(),
-        maxLon: bounds.getEast()
-      });
-    },
-    zoomend: () => {
-      const bounds = map.getBounds();
-      onBoundsChange({
-        minLat: bounds.getSouth(),
-        maxLat: bounds.getNorth(),
-        minLon: bounds.getWest(),
-        maxLon: bounds.getEast()
-      });
-    }
-  });
+/**
+ * Damage Hex Layer Component
+ */
+function DamageHexLayer({
+  data,
+  selected,
+  onSelect,
+}: {
+  data: DamageItem[];
+  selected: DamageItem | null;
+  onSelect: (item: DamageItem) => void;
+}) {
+  const [boundaries, setBoundaries] = useState<Map<string, [number, number][]>>(new Map());
 
-  // Fire initial bounds
   useEffect(() => {
-    const bounds = map.getBounds();
-    onBoundsChange({
-      minLat: bounds.getSouth(),
-      maxLat: bounds.getNorth(),
-      minLon: bounds.getWest(),
-      maxLon: bounds.getEast()
-    });
-  }, [map, onBoundsChange]);
+    const loadBoundaries = async () => {
+      const newBoundaries = new Map<string, [number, number][]>();
+      for (const item of data) {
+        const boundary = await getHexBoundary(item.hex_id, item.location.lat, item.location.lon);
+        newBoundaries.set(item.hex_id, boundary);
+      }
+      setBoundaries(newBoundaries);
+    };
+    loadBoundaries();
+  }, [data]);
 
-  return null;
+  return (
+    <>
+      {data.map((item) => {
+        const boundary = boundaries.get(item.hex_id);
+        if (!boundary || boundary.length === 0) return null;
+
+        const color = getDamageColor(item.prophet_classification);
+        const isSelected = selected?.hex_id === item.hex_id;
+
+        return (
+          <Polygon
+            key={`damage-${item.hex_id}`}
+            positions={boundary}
+            pathOptions={{
+              color: isSelected ? '#ffffff' : color,
+              fillColor: color,
+              fillOpacity: isSelected ? 0.8 : 0.5,
+              weight: isSelected ? 3 : 1,
+              dashArray: '5, 5', // Dashed to distinguish from congestion
+            }}
+            eventHandlers={{
+              click: () => onSelect(item),
+            }}
+          >
+            <Popup>
+              <div className="min-w-[200px] p-2">
+                <div className="font-bold text-sm mb-2 flex items-center gap-2">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  Quality: {item.prophet_classification.toUpperCase()}
+                </div>
+                <div className="text-xs space-y-1">
+                  <div>📏 Roughness: <strong>{item.derived_metrics.roughness_index.toFixed(3)}</strong></div>
+                  <div>⚡ Spike: <strong>{item.derived_metrics.spike_index.toFixed(3)}</strong></div>
+                  <div>💺 Comfort: <strong>{item.derived_metrics.ride_comfort_score.toFixed(0)}/100</strong></div>
+                  <div>📐 Damage Area: <strong>{item.road_damage_area_avg.toFixed(2)}</strong></div>
+                  <div>📍 Events: <strong>{item.event_count}</strong></div>
+                </div>
+                <div className="text-xs text-gray-500 mt-2 pt-2 border-t">
+                  Hex: {item.hex_id.slice(0, 12)}...
+                </div>
+              </div>
+            </Popup>
+          </Polygon>
+        );
+      })}
+    </>
+  );
 }
 
-export function DashboardMap({ events, selectedEvent, onEventSelect, showHeatmap = false, showTraffic = false }: DashboardMapProps) {
-  const defaultCenter: [number, number] = [30.7333, 76.7794]; // Chandigarh
-  const [tiles, setTiles] = useState<TileData[]>([]);
-  const [loadingTiles, setLoadingTiles] = useState(false);
-  
-  const center = selectedEvent 
-    ? [selectedEvent.lat_center, selectedEvent.lon_center] as [number, number]
-    : defaultCenter;
+/**
+ * Center markers for hex cells (fallback visualization)
+ */
+function CenterMarkers({
+  congestionData,
+  damageData,
+  onCongestionSelect,
+  onDamageSelect,
+}: {
+  congestionData: CongestionItem[];
+  damageData: DamageItem[];
+  onCongestionSelect: (item: CongestionItem) => void;
+  onDamageSelect: (item: DamageItem) => void;
+}) {
+  // Create a set of hex IDs that have damage data
+  const damageHexIds = useMemo(
+    () => new Set(damageData.map((d) => d.hex_id)),
+    [damageData]
+  );
 
-  const handleBoundsChange = useCallback(async (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => {
-    if (!showHeatmap) return;
-    
-    setLoadingTiles(true);
-    try {
-      const fetchedTiles = await fetchTilesInViewport(bounds);
-      setTiles(fetchedTiles);
-    } catch (error) {
-      console.error('Failed to fetch tiles:', error);
-    } finally {
-      setLoadingTiles(false);
+  return (
+    <>
+      {/* Congestion markers (outer ring) */}
+      {congestionData.map((item) => (
+        <CircleMarker
+          key={`marker-congestion-${item.hex_id}`}
+          center={[item.location.lat, item.location.lon]}
+          radius={damageHexIds.has(item.hex_id) ? 12 : 8}
+          pathOptions={{
+            color: getCongestionColor(item.congestion_level),
+            fillColor: getCongestionColor(item.congestion_level),
+            fillOpacity: 0.6,
+            weight: 2,
+          }}
+          eventHandlers={{
+            click: () => onCongestionSelect(item),
+          }}
+        />
+      ))}
+
+      {/* Damage markers (inner dot) */}
+      {damageData.map((item) => (
+        <CircleMarker
+          key={`marker-damage-${item.hex_id}`}
+          center={[item.location.lat, item.location.lon]}
+          radius={5}
+          pathOptions={{
+            color: getDamageColor(item.prophet_classification),
+            fillColor: getDamageColor(item.prophet_classification),
+            fillOpacity: 0.9,
+            weight: 1,
+          }}
+          eventHandlers={{
+            click: () => onDamageSelect(item),
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Main Dashboard Map Component
+ */
+export function DashboardMap({
+  congestionData,
+  damageData,
+  selectedCongestion,
+  selectedDamage,
+  onCongestionSelect,
+  onDamageSelect,
+}: DashboardMapProps) {
+  // Calculate map center based on data or selection
+  const center = useMemo<[number, number]>(() => {
+    // Priority: selected items > first data item > default
+    if (selectedCongestion) {
+      return [selectedCongestion.location.lat, selectedCongestion.location.lon];
     }
-  }, [showHeatmap]);
-
-  // Clear tiles when heatmap is turned off
-  useEffect(() => {
-    if (!showHeatmap) {
-      setTiles([]);
+    if (selectedDamage) {
+      return [selectedDamage.location.lat, selectedDamage.location.lon];
     }
-  }, [showHeatmap]);
+    if (congestionData.length > 0) {
+      return [congestionData[0].location.lat, congestionData[0].location.lon];
+    }
+    if (damageData.length > 0) {
+      return [damageData[0].location.lat, damageData[0].location.lon];
+    }
+    return DEFAULT_CENTER;
+  }, [selectedCongestion, selectedDamage, congestionData, damageData]);
 
-  // Show events view by default (not heatmap, not traffic)
-  const showEvents = !showHeatmap && !showTraffic;
+  const hasData = congestionData.length > 0 || damageData.length > 0;
 
   return (
     <div className="h-full w-full relative z-0">
-      {loadingTiles && showHeatmap && (
-        <div className="absolute top-2 left-2 z-[1000] bg-background/80 px-2 py-1 rounded text-xs flex items-center gap-1">
-          <div className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full"></div>
-          Loading tiles...
+      {/* Loading/Empty state overlay */}
+      {!hasData && (
+        <div className="absolute inset-0 z-[1000] bg-background/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center p-4">
+            <div className="text-4xl mb-2">🗺️</div>
+            <p className="text-muted-foreground">No data for selected filters</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Try changing the date or filter settings
+            </p>
+          </div>
         </div>
       )}
-      <MapContainer 
-        center={center} 
-        zoom={13} 
-        style={{ height: '100%', width: '100%', minHeight: '100%', borderRadius: '0.75rem', background: '#e5e7eb' }}
+
+      <MapContainer
+        center={center}
+        zoom={14}
+        style={{
+          height: '100%',
+          width: '100%',
+          minHeight: '100%',
+          borderRadius: '0.75rem',
+          background: '#e5e7eb',
+        }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapUpdater center={center} />
-        
-        {/* Heatmap Layer */}
-        {showHeatmap && (
-          <>
-            <BoundsWatcher onBoundsChange={handleBoundsChange} />
-            <HeatmapLayer tiles={tiles} />
-          </>
-        )}
 
-        {/* Traffic Layer */}
-        {showTraffic && (
-          <TrafficLayer events={events} />
-        )}
-        
-        {/* Event Markers (show when in events mode) */}
-        {showEvents && events.map((event) => (
-          <CircleMarker
-            key={event.id}
-            center={[event.lat_center, event.lon_center]}
-            radius={8}
-            pathOptions={{
-              color: event.needs_attention ? '#ef4444' : '#3b82f6',
-              fillColor: event.needs_attention ? '#ef4444' : '#3b82f6',
-              fillOpacity: 0.7,
-              weight: 2
-            }}
-            eventHandlers={{
-              click: () => onEventSelect(event),
-            }}
-          >
-            <Popup>
-              <div className="p-2">
-                <h3 className="font-bold">{event.sector || "Unknown Location"}</h3>
-                <p className="text-sm text-gray-600">{event.street_name}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {new Date(event.event_timestamp).toLocaleString()}
-                </p>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        {/* Hex polygons */}
+        <CongestionHexLayer
+          data={congestionData}
+          selected={selectedCongestion}
+          onSelect={onCongestionSelect}
+        />
+        <DamageHexLayer
+          data={damageData}
+          selected={selectedDamage}
+          onSelect={onDamageSelect}
+        />
+
+        {/* Fallback center markers (always visible for click targets) */}
+        <CenterMarkers
+          congestionData={congestionData}
+          damageData={damageData}
+          onCongestionSelect={onCongestionSelect}
+          onDamageSelect={onDamageSelect}
+        />
       </MapContainer>
     </div>
   );
