@@ -166,6 +166,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>('combined');
   
   // Selection State
@@ -195,8 +196,30 @@ const Dashboard = () => {
         setLoading(true);
       }
       setError(null);
+      setNotice(null);
 
-      const data = await fetchAllData(filters.date);
+      const primaryDate = filters.date;
+      let data = await fetchAllData(primaryDate);
+      let usedDate = primaryDate;
+
+      // If no data on the selected date, fall back to earlier dates in the selector list
+      if (data.congestion.length === 0 && data.damage.length === 0) {
+        const fallbackDates = availableDates
+          .map((d) => d.value)
+          .filter((d) => d !== primaryDate);
+
+        for (const candidate of fallbackDates) {
+          const alt = await fetchAllData(candidate);
+          if (alt.congestion.length > 0 || alt.damage.length > 0) {
+            data = alt;
+            usedDate = candidate;
+            setNotice(`No data for ${primaryDate}; showing ${candidate} instead.`);
+            // Update the UI-selected date to the fallback so filters stay in sync
+            setFilters((f) => ({ ...f, date: candidate }));
+            break;
+          }
+        }
+      }
       
       setCongestionData(data.congestion);
       setDamageData(data.damage);
@@ -208,6 +231,10 @@ const Dashboard = () => {
       }
       if (data.damage.length > 0 && !selectedDamage) {
         setSelectedDamage(data.damage[0]);
+      }
+
+      if (data.congestion.length === 0 && data.damage.length === 0) {
+        setError(`No DynamoDB data found for ${usedDate} (and nearby dates).`);
       }
     } catch (err: any) {
       console.error('Failed to load data:', err);
@@ -396,6 +423,14 @@ const Dashboard = () => {
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-500">
                 <AlertTriangle className="w-4 h-4" />
                 {error}
+              </div>
+            </div>
+          )}
+          {notice && (
+            <div className="mt-4">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm text-amber-600">
+                <Clock className="w-4 h-4" />
+                {notice}
               </div>
             </div>
           )}

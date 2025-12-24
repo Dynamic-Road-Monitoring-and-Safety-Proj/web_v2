@@ -1,0 +1,424 @@
+FRONTEND ARCHITECTURE GUIDE - ROAD DAMAGE & CONGESTION MONITORING SYSTEM
+==========================================================================
+
+This document contains the complete backend architecture and data structures
+for building a frontend application. Use this as reference for API integration.
+
+================================================================================
+1. DYNAMODB TABLE STRUCTURE
+================================================================================
+
+Table Naming Convention:
+------------------------
+Tables are organized by CITY, not by date.
+
+Pattern: road_{city}_{type}
+
+Examples:
+- road_mumbai_damage
+- road_mumbai_congestion  
+- road_delhi_damage
+- road_delhi_congestion
+- road_bangalore_damage
+- road_bangalore_congestion
+
+To get list of cities with data:
+1. List all DynamoDB tables with prefix "road_"
+2. Extract city names: table.replace('road_', '').replace('_damage', '').replace('_congestion', '')
+
+================================================================================
+2. DATA SCHEMAS
+================================================================================
+
+A. DAMAGE TABLE SCHEMA (road_{city}_damage)
+-------------------------------------------
+Hexagon Resolution: H3-10 (~50 meter radius)
+
+{
+  "hex_id": "8a2badb0c6e7fff",          // H3 hexagon ID (primary key)
+  "sensor_metrics": {
+    "acc_x_avg": 0.12,
+    "acc_y_avg": 0.05,
+    "acc_z_avg": 9.81,
+    "gyro_x_avg": 0.02,
+    "gyro_y_avg": 0.01,
+    "gyro_z_avg": 0.03
+  },
+  "derived_metrics": {
+    "roughness_index": 2.5,              // Higher = rougher road
+    "spike_index": 1.2,                  // Sudden bumps detected
+    "vertical_displacement": 0.05,       // Meters
+    "jerk_magnitude": 3.2,
+    "ride_comfort_score": 6.5            // 0-10 scale, 10 = smooth
+  },
+  "road_damage_area_avg": 12.5,          // Percentage of frame with damage
+  "damage_severity_score": 45.2,         // 0-100 scale
+  "damage_frequency": 25.0,              // Percentage of frames with damage
+  "total_potholes": 15,                  // Count
+  "total_cracks": 8,                     // Count
+  "pothole_events_count": 5,             // Events merged from sensor data
+  "prophet_classification": "moderate",   // "severe" | "moderate" | "good"
+  "event_count": 12,                     // Number of videos contributing to this hex
+  "last_5_videos": [                     // Recent video URLs
+    "s3://bucket/videos/vid1.mp4",
+    "s3://bucket/videos/vid2.mp4"
+  ],
+  "last_corporation_visit": null,        // ISO timestamp or null
+  "last_updated": "2025-12-25T10:30:00", // ISO timestamp
+  "location": {
+    "lat": 19.0760,
+    "lon": 72.8777,
+    "city": "mumbai",
+    "state": "Maharashtra"
+  }
+}
+
+
+B. CONGESTION TABLE SCHEMA (road_{city}_congestion)
+---------------------------------------------------
+Hexagon Resolution: H3-12 (~10 meter radius) - More precise for traffic
+
+{
+  "hex_id": "8c2badb1d7f5cff",           // H3 hexagon ID (primary key)
+  "velocity_avg": 25.5,                   // km/h average speed
+  "vehicle_count_avg": 15.2,              // Average vehicles per frame
+  "vehicle_composition": {                // Percentage breakdown
+    "light": 45.5,                        // Cars, motorcycles, bicycles
+    "medium": 32.0,                       // Auto-rickshaws, buses
+    "heavy": 22.5                         // Trucks, tractors
+  },
+  "vehicle_detailed": {                   // EXACT COUNTS from CV model
+    "car": 120,
+    "motorcycle": 85,
+    "bicycle": 12,
+    "cycle_rickshaw": 8,
+    "auto_rickshaw": 45,
+    "e_rickshaw": 22,
+    "bus": 15,
+    "truck": 30,
+    "tractor": 5
+  },
+  "traffic_density": 8.5,                 // Vehicles per frame
+  "peak_vehicle_count": 25,               // Max vehicles in single frame
+  "road_name": "Marine Drive",            // From geocoding
+  "peak_hour_flag": true,                 // Video captured during peak hours
+  "congestion_level": "high",             // "high" | "medium" | "low"
+  "event_count": 8,                       // Number of videos for this hex
+  "last_5_videos": ["s3://..."],
+  "last_updated": "2025-12-25T10:30:00",
+  "location": {
+    "lat": 19.0760,
+    "lon": 72.8777,
+    "city": "mumbai",
+    "state": "Maharashtra"
+  }
+}
+
+================================================================================
+3. VEHICLE CLASSES (CV MODEL OUTPUT)
+================================================================================
+
+The congestion model detects 9 vehicle classes:
+
+Category: LIGHT (fast, small vehicles)
+- car
+- motorcycle  
+- bicycle
+- cycle_rickshaw
+
+Category: MEDIUM (medium size, moderate speed)
+- auto_rickshaw
+- e_rickshaw
+- bus
+
+Category: HEAVY (large, slow vehicles)
+- truck
+- tractor
+
+Note: Class names may have variations (hyphen vs underscore):
+- "auto-rickshaw" and "auto_rickshaw" are same
+- "cycle-rickshaw" and "cycle_rickshaw" are same
+- "e-rickshaw" and "e_rickshaw" are same
+
+Always normalize: replace hyphens with underscores
+
+================================================================================
+4. H3 HEXAGON SYSTEM
+================================================================================
+
+Using Uber's H3 hexagonal grid system for spatial indexing.
+
+Resolution Details:
+- Damage: H3 Resolution 10 = ~66m edge length, ~50m radius
+- Congestion: H3 Resolution 12 = ~9m edge length, ~10m radius
+
+Frontend H3 Library:
+- JavaScript: npm install h3-js
+- React: npm install h3-js
+
+Key Functions:
+```javascript
+import { h3ToGeoBoundary, h3ToGeo, geoToH3 } from 'h3-js';
+
+// Convert hex_id to polygon coordinates for map
+const boundary = h3ToGeoBoundary(hexId);
+// Returns: [[lat, lng], [lat, lng], ...] - polygon vertices
+
+// Get center of hexagon
+const [lat, lng] = h3ToGeo(hexId);
+
+// Convert coordinates to hex_id
+const hexId = geoToH3(lat, lng, resolution); // resolution: 10 or 12
+```
+
+================================================================================
+5. PEAK HOURS
+================================================================================
+
+Backend Configuration:
+- Morning Peak: 7:00 AM - 10:00 AM (07:00 - 10:00)
+- Evening Peak: 5:00 PM - 8:00 PM (17:00 - 20:00)
+
+peak_hour_flag = true if video timestamp falls within these ranges
+
+================================================================================
+6. EVENT COUNT
+================================================================================
+
+event_count = Number of videos that contributed data to this hexagon
+
+Use cases:
+- Higher event_count = more reliable data
+- Show confidence indicator based on event_count
+- Filter hexagons with minimum event_count for reliable visualization
+
+================================================================================
+7. SUGGESTED FRONTEND FEATURES
+================================================================================
+
+A. MAP VIEW (Main Dashboard)
+----------------------------
+- Display hexagonal grid overlay on map
+- Color code hexagons by severity:
+  * Damage: Red (severe) / Yellow (moderate) / Green (good)
+  * Congestion: Red (high) / Yellow (medium) / Green (low)
+- Click hexagon to show details popup
+- Toggle between damage and congestion views
+- Filter by city dropdown
+
+B. CITY SELECTOR
+----------------
+- Dropdown with Indian states
+- Second dropdown with cities (populated from DynamoDB tables)
+- States list available from backend:
+  ['Maharashtra', 'Delhi', 'Karnataka', 'Tamil Nadu', ...]
+
+C. HEXAGON DETAIL VIEW
+----------------------
+Show when user clicks a hexagon:
+- Location (lat, lon, road name)
+- Last updated timestamp
+- Event count (number of data points)
+- Severity/congestion level
+- Damage: roughness_index, pothole count, damage_area
+- Congestion: velocity, vehicle counts, composition chart
+- Video thumbnails/links
+
+D. VEHICLE COMPOSITION CHART
+----------------------------
+Pie chart or bar chart showing:
+- By category (light/medium/heavy) - percentages
+- By vehicle type (car, motorcycle, etc.) - exact counts
+- Total vehicle count
+
+E. TIME-BASED ANALYSIS
+----------------------
+- Peak hour vs non-peak comparison
+- Trend over time (using last_updated)
+- Historical comparison
+
+F. DAMAGE SEVERITY VISUALIZATION
+--------------------------------
+Color scale based on:
+- roughness_index: 0-5 (0=smooth, 5=very rough)
+- damage_severity_score: 0-100
+- prophet_classification: severe/moderate/good
+
+G. ALERTS/NOTIFICATIONS
+-----------------------
+- New severe damage detected
+- High congestion alerts
+- Areas needing corporation visit
+
+================================================================================
+8. RECOMMENDED TECH STACK
+================================================================================
+
+Map Libraries:
+- Leaflet.js (free, lightweight)
+- Mapbox GL JS (premium features)
+- Google Maps API (if already using Google services)
+- Deck.gl (for advanced H3 visualization)
+
+H3 Visualization:
+- deck.gl H3HexagonLayer (best for large datasets)
+- h3-js + custom polygon rendering
+- geojson2h3 for GeoJSON conversion
+
+Charts:
+- Chart.js (simple, fast)
+- Recharts (React)
+- D3.js (complex visualizations)
+- ApexCharts (beautiful defaults)
+
+State Management:
+- React Query (for DynamoDB data fetching)
+- Redux Toolkit (if complex state)
+- Zustand (lightweight alternative)
+
+================================================================================
+9. API QUERIES (AWS SDK)
+================================================================================
+
+List all tables (get cities):
+```javascript
+const dynamodb = new AWS.DynamoDB();
+const tables = await dynamodb.listTables().promise();
+const damageTables = tables.TableNames.filter(t => t.includes('_damage'));
+```
+
+Scan city data:
+```javascript
+const docClient = new AWS.DynamoDB.DocumentClient();
+const result = await docClient.scan({
+  TableName: 'road_mumbai_damage'
+}).promise();
+const hexagons = result.Items;
+```
+
+Get single hexagon:
+```javascript
+const result = await docClient.get({
+  TableName: 'road_mumbai_congestion',
+  Key: { hex_id: '8c2badb1d7f5cff' }
+}).promise();
+```
+
+Query recent updates:
+```javascript
+// Note: This requires GSI on last_updated for efficiency
+const result = await docClient.scan({
+  TableName: 'road_mumbai_damage',
+  FilterExpression: 'last_updated > :cutoff',
+  ExpressionAttributeValues: {
+    ':cutoff': '2025-12-24T00:00:00'
+  }
+}).promise();
+```
+
+================================================================================
+10. COLOR SCHEMES
+================================================================================
+
+Damage Severity:
+- Severe (prophet_classification = "severe"): #FF0000 (Red)
+- Moderate: #FFA500 (Orange)  
+- Good: #00FF00 (Green)
+
+Congestion Level:
+- High: #FF0000 (Red)
+- Medium: #FFFF00 (Yellow)
+- Low: #00FF00 (Green)
+
+Vehicle Categories:
+- Light: #3498db (Blue)
+- Medium: #f39c12 (Orange)
+- Heavy: #e74c3c (Red)
+
+================================================================================
+11. SAMPLE DATA FOR TESTING
+================================================================================
+
+Mock Damage Hexagon:
+{
+  "hex_id": "8a2badb0c6e7fff",
+  "road_damage_area_avg": 15.5,
+  "damage_severity_score": 62.0,
+  "prophet_classification": "moderate",
+  "total_potholes": 8,
+  "total_cracks": 3,
+  "event_count": 5,
+  "last_updated": "2025-12-25T10:30:00",
+  "location": {
+    "lat": 19.0760,
+    "lon": 72.8777,
+    "city": "mumbai",
+    "state": "Maharashtra"
+  }
+}
+
+Mock Congestion Hexagon:
+{
+  "hex_id": "8c2badb1d7f5cff",
+  "velocity_avg": 15.2,
+  "vehicle_count_avg": 22.5,
+  "congestion_level": "high",
+  "peak_hour_flag": true,
+  "vehicle_composition": {"light": 50, "medium": 30, "heavy": 20},
+  "vehicle_detailed": {
+    "car": 45, "motorcycle": 30, "bicycle": 5, "cycle_rickshaw": 2,
+    "auto_rickshaw": 18, "e_rickshaw": 8, "bus": 6,
+    "truck": 10, "tractor": 2
+  },
+  "event_count": 12,
+  "last_updated": "2025-12-25T11:00:00",
+  "location": {
+    "lat": 19.0762,
+    "lon": 72.8780,
+    "city": "mumbai",
+    "state": "Maharashtra"
+  }
+}
+
+================================================================================
+12. FRONTEND TIPS
+================================================================================
+
+1. PERFORMANCE:
+   - Use virtualization for large hexagon lists
+   - Cluster hexagons at low zoom levels
+   - Load data on-demand by viewport bounds
+   - Cache DynamoDB responses
+
+2. UX BEST PRACTICES:
+   - Show loading skeletons while fetching
+   - Indicate data freshness (last_updated)
+   - Show event_count as "confidence" indicator
+   - Allow filtering by severity/congestion level
+
+3. MAP OPTIMIZATION:
+   - Use vector tiles for base map
+   - Render H3 hexagons as GeoJSON
+   - Use WebGL for >1000 hexagons (deck.gl)
+   - Implement level-of-detail (LOD)
+
+4. MOBILE RESPONSIVENESS:
+   - Touch-friendly hexagon selection
+   - Collapsible detail panels
+   - Swipe between cities
+   - Offline capability for cached data
+
+5. ACCESSIBILITY:
+   - Color-blind friendly palette
+   - Screen reader support for data
+   - Keyboard navigation on map
+   - High contrast mode
+
+6. DATA REFRESH:
+   - Implement polling or websockets for live updates
+   - Show "stale data" warning if last_updated > 24h
+   - Manual refresh button
+
+================================================================================
+END OF FRONTEND ARCHITECTURE GUIDE
+================================================================================

@@ -263,11 +263,12 @@ export const fetchCongestionData = async (date: string): Promise<CongestionItem[
     
     return response.Items.map(parseCongestionItem);
   } catch (error: any) {
-    console.error(`Error fetching congestion data for ${date}:`, error);
-    // If table doesn't exist, return empty array
+    // For missing tables, return empty quietly; otherwise bubble up
     if (error.name === 'ResourceNotFoundException') {
+      console.warn(`DynamoDB table not found: ${tableName}`);
       return [];
     }
+    console.error(`Error fetching congestion data for ${date}:`, error);
     throw error;
   }
 };
@@ -293,10 +294,11 @@ export const fetchDamageData = async (date: string): Promise<DamageItem[]> => {
     
     return response.Items.map(parseDamageItem);
   } catch (error: any) {
-    console.error(`Error fetching damage data for ${date}:`, error);
     if (error.name === 'ResourceNotFoundException') {
+      console.warn(`DynamoDB table not found: ${tableName}`);
       return [];
     }
+    console.error(`Error fetching damage data for ${date}:`, error);
     throw error;
   }
 };
