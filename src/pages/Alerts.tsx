@@ -13,7 +13,6 @@ import {
   getDamageColor,
 } from "@/lib/dynamodb";
 import { CongestionItem, DamageItem, CityInfo } from "@/lib/types";
-import { mockCities, getMockDataResponse, USE_MOCK_DATA } from "@/lib/mockData";
 
 // Alert type derived from data
 interface Alert {
@@ -153,18 +152,16 @@ const Alerts = () => {
   // Load available cities
   useEffect(() => {
     const loadCities = async () => {
-      if (USE_MOCK_DATA) {
-        setAvailableCities(mockCities);
-      } else {
+      try {
         const cities = await fetchAvailableCities();
         if (cities.length > 0) {
           setAvailableCities(cities);
           if (!cities.find(c => c.name === selectedCity)) {
             setSelectedCity(cities[0].name);
           }
-        } else {
-          setAvailableCities(mockCities);
         }
+      } catch (error) {
+        console.error('Failed to load cities:', error);
       }
     };
     loadCities();
@@ -178,12 +175,7 @@ const Alerts = () => {
         setLoading(true);
       }
       
-      let data;
-      if (USE_MOCK_DATA) {
-        data = getMockDataResponse();
-      } else {
-        data = await fetchAllData(selectedCity);
-      }
+      const data = await fetchAllData(selectedCity);
       
       setCongestionData(data.congestion);
       setDamageData(data.damage);
@@ -254,7 +246,19 @@ const Alerts = () => {
               <Bell className="w-8 h-8 text-primary" />
               System Alerts
             </h1>
-            <p className="text-muted-foreground">Real-time alerts from DynamoDB • H3 Hex Data</p>
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                Live
+              </span>
+              <span>•</span>
+              <span>{selectedCity.charAt(0).toUpperCase() + selectedCity.slice(1)}</span>
+              <span>•</span>
+              <span>{alerts.length} alerts</span>
+            </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">

@@ -39,7 +39,6 @@ import {
   fetchAvailableCities,
 } from "@/lib/dynamodb";
 import { CongestionItem, DamageItem, DashboardStats, CityInfo } from "@/lib/types";
-import { mockCities, getMockDataResponse, USE_MOCK_DATA } from "@/lib/mockData";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -66,18 +65,16 @@ const Reports = () => {
   // Load available cities
   useEffect(() => {
     const loadCities = async () => {
-      if (USE_MOCK_DATA) {
-        setAvailableCities(mockCities);
-      } else {
+      try {
         const cities = await fetchAvailableCities();
         if (cities.length > 0) {
           setAvailableCities(cities);
           if (!cities.find(c => c.name === selectedCity)) {
             setSelectedCity(cities[0].name);
           }
-        } else {
-          setAvailableCities(mockCities);
         }
+      } catch (error) {
+        console.error('Failed to load cities:', error);
       }
     };
     loadCities();
@@ -91,12 +88,7 @@ const Reports = () => {
         setLoading(true);
       }
       
-      let data;
-      if (USE_MOCK_DATA) {
-        data = getMockDataResponse();
-      } else {
-        data = await fetchAllData(selectedCity);
-      }
+      const data = await fetchAllData(selectedCity);
       
       setCongestionData(data.congestion);
       setDamageData(data.damage);
@@ -246,7 +238,19 @@ const Reports = () => {
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
               Reports & Analytics
             </h1>
-            <p className="text-muted-foreground">Data from DynamoDB • City: {selectedCity.charAt(0).toUpperCase() + selectedCity.slice(1)}</p>
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                Live Data
+              </span>
+              <span>•</span>
+              <span>{selectedCity.charAt(0).toUpperCase() + selectedCity.slice(1)}</span>
+              <span>•</span>
+              <span>{congestionData.length + damageData.length} records</span>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* City Selector */}

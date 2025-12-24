@@ -36,7 +36,6 @@ import {
   filterCongestionByLevel,
   filterDamageByClassification,
 } from "@/lib/dynamodb";
-import { mockCities, getMockDataResponse, USE_MOCK_DATA } from "@/lib/mockData";
 import {
   CongestionItem,
   DamageItem,
@@ -171,6 +170,7 @@ const Dashboard = () => {
   // Selection State
   const [selectedCongestion, setSelectedCongestion] = useState<CongestionItem | null>(null);
   const [selectedDamage, setSelectedDamage] = useState<DamageItem | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   
   // Filter State
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -187,9 +187,7 @@ const Dashboard = () => {
   // Load available cities on mount
   useEffect(() => {
     const loadCities = async () => {
-      if (USE_MOCK_DATA) {
-        setAvailableCities(mockCities);
-      } else {
+      try {
         const cities = await fetchAvailableCities();
         if (cities.length > 0) {
           setAvailableCities(cities);
@@ -198,9 +196,12 @@ const Dashboard = () => {
             setFilters(f => ({ ...f, city: cities[0].name }));
           }
         } else {
-          // Fallback to mock cities
-          setAvailableCities(mockCities);
+          // No cities available
+          setError('No cities available. Please check your database configuration.');
         }
+      } catch (err: any) {
+        console.error('Failed to load cities:', err);
+        setError('Failed to load cities from DynamoDB');
       }
     };
     loadCities();
@@ -219,12 +220,7 @@ const Dashboard = () => {
       setError(null);
       setNotice(null);
 
-      let data;
-      if (USE_MOCK_DATA) {
-        data = getMockDataResponse();
-      } else {
-        data = await fetchAllData(filters.city);
-      }
+      const data = await fetchAllData(filters.city);
       
       setCongestionData(data.congestion);
       setDamageData(data.damage);
@@ -241,6 +237,8 @@ const Dashboard = () => {
       if (data.congestion.length === 0 && data.damage.length === 0) {
         setNotice(`No data available for ${filters.city}. Try another city.`);
       }
+      
+      setLastRefreshTime(new Date());
     } catch (err: any) {
       console.error('Failed to load data:', err);
       setError(err.message || 'Failed to load data from DynamoDB');
@@ -339,9 +337,37 @@ const Dashboard = () => {
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold mb-2">Road Monitoring Dashboard</h1>
-              <p className="text-muted-foreground">
-                Real-time data from DynamoDB • City: {filters.city.charAt(0).toUpperCase() + filters.city.slice(1)}
-              </p>
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  Connected to DynamoDB
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5" />
+                  {filters.city.charAt(0).toUpperCase() + filters.city.slice(1)}
+                </span>
+                {lastRefreshTime && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      Updated {lastRefreshTime.toLocaleTimeString()}
+                    </span>
+                  </>
+                )}
+                {(congestionData.length > 0 || damageData.length > 0) && (
+                  <>
+                    <span>•</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {congestionData.length + damageData.length} records
+                    </Badge>
+                  </>
+                )}
+              </div>
             </div>
             
             <div className="flex flex-wrap items-center gap-3">

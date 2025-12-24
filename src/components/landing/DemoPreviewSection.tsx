@@ -1,9 +1,24 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowRight, MapPin, AlertTriangle, Activity, TrendingUp, Zap } from "lucide-react";
-import { mockDamageData, mockCongestionData, calculateMockStats } from "@/lib/mockData";
+import { ArrowRight, MapPin, AlertTriangle, Activity, TrendingUp, Zap, Database } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+
+// Static demo data for landing page preview - doesn't require database connection
+const demoStats = {
+  totalEvents: 248,
+  severeDamageCount: 12,
+  highCongestionCount: 8,
+  totalPotholes: 156,
+};
+
+// Demo hex positions for visualization
+const demoHexPoints = [
+  { id: 1, x: 20, y: 30 },
+  { id: 2, x: 45, y: 55 },
+  { id: 3, x: 65, y: 35 },
+  { id: 4, x: 80, y: 60 },
+];
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -21,7 +36,7 @@ const itemVariants = {
 };
 
 export const DemoPreviewSection = () => {
-  const stats = calculateMockStats(mockCongestionData, mockDamageData);
+  const stats = demoStats;
 
   return (
     <section className="py-24 relative overflow-hidden">
@@ -103,19 +118,19 @@ export const DemoPreviewSection = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   {/* Simplified map representation */}
                   <div className="relative w-full h-full">
-                    {mockDamageData.slice(0, 4).map((item, index) => (
+                    {demoHexPoints.map((point, index) => (
                       <motion.div
-                        key={item.hex_id}
+                        key={point.id}
                         className="absolute w-6 h-6 rounded-full bg-urgent/20 border-2 border-urgent cursor-pointer hover:scale-125 transition-transform"
                         style={{
-                          left: `${20 + index * 20}%`,
-                          top: `${30 + (index % 2) * 30}%`,
+                          left: `${point.x}%`,
+                          top: `${point.y}%`,
                         }}
                         initial={{ scale: 0, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ delay: 0.5 + index * 0.2, duration: 0.5 }}
                         whileHover={{ scale: 1.3 }}
-                        title={`Hex ${item.hex_id.slice(0, 8)}`}
+                        title={`Detection Point ${point.id}`}
                       >
                         <motion.div 
                           className="absolute inset-0 rounded-full bg-urgent/50"
