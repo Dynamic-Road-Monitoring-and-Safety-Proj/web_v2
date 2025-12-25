@@ -53,3 +53,4 @@ bun.lockb
 .env*.local
 /lambda
 .env.vercel
+.env.development
