@@ -174,7 +174,7 @@ const Dashboard = () => {
   
   // Filter State
   const [filters, setFilters] = useState<DashboardFilters>({
-    city: 'mumbai', // Default city
+    city: 'patna', // Default city
     congestionLevel: 'all',
     prophetClassification: 'all',
     showCongestion: true,

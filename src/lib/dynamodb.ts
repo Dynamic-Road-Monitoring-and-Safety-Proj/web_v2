@@ -21,13 +21,24 @@ import {
 // ============================================
 
 const getAwsConfig = () => {
-  return {
+  const config = {
     region: import.meta.env.VITE_AWS_REGION || 'ap-south-1',
     credentials: {
       accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
       secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '',
     },
   };
+  
+  // Debug: Log credential status (not the actual values for security)
+  console.log('AWS Config Debug:', {
+    region: config.region,
+    hasAccessKey: !!config.credentials.accessKeyId,
+    accessKeyPrefix: config.credentials.accessKeyId?.substring(0, 8) + '...',
+    hasSecretKey: !!config.credentials.secretAccessKey,
+    secretKeyLength: config.credentials.secretAccessKey?.length,
+  });
+  
+  return config;
 };
 
 // Create DynamoDB client (lazy initialization)

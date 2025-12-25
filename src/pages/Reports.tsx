@@ -59,7 +59,7 @@ const Reports = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCity, setSelectedCity] = useState('mumbai');
+  const [selectedCity, setSelectedCity] = useState('patna');
   const [availableCities, setAvailableCities] = useState<CityInfo[]>([]);
 
   // Load available cities
