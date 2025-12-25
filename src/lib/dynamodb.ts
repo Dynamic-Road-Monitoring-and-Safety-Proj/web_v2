@@ -2,7 +2,7 @@
 // City-based table structure: road_{city}_damage, road_{city}_congestion
 
 import { DynamoDBClient, ScanCommand, ListTablesCommand } from '@aws-sdk/client-dynamodb';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {
@@ -83,13 +83,12 @@ const parseS3Uri = (s3Uri: string): { bucket: string; key: string } | null => {
     return null;
   }
   
-  let bucket = withoutProtocol.substring(0, slashIndex);
+  // The bucket name is exactly as specified in the URI
+  // e.g., s3://rdcm.s3/videos/... -> bucket = "rdcm.s3", key = "videos/..."
+  const bucket = withoutProtocol.substring(0, slashIndex);
   const key = withoutProtocol.substring(slashIndex + 1);
   
-  // Handle bucket names with .s3 suffix (e.g., rdcm.s3 -> rdcm)
-  if (bucket.endsWith('.s3')) {
-    bucket = bucket.replace('.s3', '');
-  }
+  console.log('Parsed S3 URI:', { original: s3Uri, bucket, key });
   
   return { bucket, key };
 };
@@ -114,6 +113,60 @@ export const getPresignedVideoUrl = async (s3Uri: string, expiresIn: number = 36
   
   const signedUrl = await getSignedUrl(client, command, { expiresIn });
   return signedUrl;
+};
+
+/**
+ * Check if an S3 object exists
+ */
+export const checkVideoExists = async (s3Uri: string): Promise<{ exists: boolean; error?: string }> => {
+  const parsed = parseS3Uri(s3Uri);
+  
+  if (!parsed) {
+    return { exists: false, error: `Invalid S3 URI: ${s3Uri}` };
+  }
+  
+  try {
+    const client = getS3Client();
+    const command = new HeadObjectCommand({
+      Bucket: parsed.bucket,
+      Key: parsed.key,
+    });
+    await client.send(command);
+    return { exists: true };
+  } catch (error: any) {
+    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+      return { exists: false, error: `File not found: ${parsed.key}` };
+    }
+    return { exists: false, error: error.message };
+  }
+};
+
+/**
+ * List videos in an S3 path
+ */
+export const listS3Videos = async (bucket: string = 'rdcm', prefix: string = 'videos/'): Promise<string[]> => {
+  try {
+    const client = getS3Client();
+    const command = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      MaxKeys: 100,
+    });
+    const response = await client.send(command);
+    return response.Contents?.map(obj => obj.Key || '').filter(key => key.endsWith('.mp4')) || [];
+  } catch (error: any) {
+    console.error('Failed to list S3 videos:', error);
+    return [];
+  }
+};
+
+/**
+ * Debug: Get parsed S3 info
+ */
+export const debugS3Uri = (s3Uri: string) => {
+  const parsed = parseS3Uri(s3Uri);
+  console.log('S3 URI Debug:', { original: s3Uri, parsed });
+  return parsed;
 };
 
 // ============================================

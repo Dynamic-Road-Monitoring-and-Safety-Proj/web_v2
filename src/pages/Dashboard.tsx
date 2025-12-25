@@ -61,33 +61,7 @@ const getVideoFilename = (url: string): string => {
 };
 
 // ============================================
-// Helper: Convert S3 URI to public URL
-// ============================================
-const getVideoUrl = (s3Uri: string): string => {
-  // Handle different S3 URI formats
-  // s3://bucket-name/key -> https://bucket-name.s3.region.amazonaws.com/key
-  // s3://rdcm.s3/videos/... -> https://rdcm.s3.ap-south-1.amazonaws.com/videos/...
-  
-  if (s3Uri.startsWith('s3://')) {
-    // Extract bucket and key from s3://bucket/key format
-    const withoutProtocol = s3Uri.replace('s3://', '');
-    const slashIndex = withoutProtocol.indexOf('/');
-    if (slashIndex > 0) {
-      const bucket = withoutProtocol.substring(0, slashIndex);
-      const key = withoutProtocol.substring(slashIndex + 1);
-      // Check if bucket already has .s3 suffix
-      if (bucket.endsWith('.s3')) {
-        const actualBucket = bucket.replace('.s3', '');
-        return `https://${actualBucket}.s3.ap-south-1.amazonaws.com/${key}`;
-      }
-      return `https://${bucket}.s3.ap-south-1.amazonaws.com/${key}`;
-    }
-  }
-  return s3Uri;
-};
-
-// ============================================
-// Video Player Component
+// Video Player Component - Fetches video as blob
 // ============================================
 const VideoPlayer = ({ 
   videos, 
@@ -100,29 +74,93 @@ const VideoPlayer = ({
 }) => {
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number>(0);
 
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const video = e.currentTarget;
-    setIsLoading(false);
-    if (video.error) {
-      setVideoError(`Failed to load video: ${video.error.message || 'Video not accessible'}`);
-    } else {
-      setVideoError('Video could not be loaded. The file may not exist or the bucket may not be public.');
-    }
-  };
-
-  const handleVideoLoad = () => {
-    setIsLoading(false);
-    setVideoError(null);
-  };
-
-  // Reset error when video changes
+  // Fetch video as blob when selected - this bypasses content-type issues
   useEffect(() => {
-    setVideoError(null);
-    if (selectedVideo) {
-      setIsLoading(true);
+    if (!selectedVideo) {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+      setVideoError(null);
+      setProgress(0);
+      return;
     }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const fetchVideo = async () => {
+      setIsLoading(true);
+      setVideoError(null);
+      setProgress(0);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+
+      try {
+        // Get presigned URL
+        const presignedUrl = await getPresignedVideoUrl(selectedVideo);
+        console.log('Fetching video from:', presignedUrl);
+
+        // Fetch the video as a blob
+        const response = await fetch(presignedUrl, { signal: controller.signal });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+        }
+
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        
+        // Read the response body in chunks to track progress
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('Unable to read response');
+
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (cancelled) return;
+          
+          chunks.push(value);
+          received += value.length;
+          if (total > 0) {
+            setProgress(Math.round((received / total) * 100));
+          }
+        }
+
+        if (cancelled) return;
+
+        // Combine chunks and create blob with correct MIME type
+        const blob = new Blob(chunks, { type: 'video/mp4' });
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+        setIsLoading(false);
+        console.log('Video blob created, size:', blob.size);
+      } catch (err: any) {
+        if (cancelled || err.name === 'AbortError') return;
+        console.error('Video fetch error:', err);
+        setVideoError(err.message || 'Failed to load video');
+        setIsLoading(false);
+      }
+    };
+
+    fetchVideo();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [selectedVideo]);
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
 
   if (videos.length === 0) {
     return (
@@ -132,8 +170,6 @@ const VideoPlayer = ({
       </div>
     );
   }
-
-  const videoUrl = selectedVideo ? getVideoUrl(selectedVideo) : null;
 
   return (
     <div className="space-y-2">
@@ -159,38 +195,36 @@ const VideoPlayer = ({
         </Select>
       </div>
       
-      {selectedVideo && videoUrl ? (
+      {selectedVideo ? (
         <div className="space-y-2">
           <div className="relative aspect-video rounded-lg overflow-hidden bg-black border border-border">
-            {isLoading && !videoError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-                <Loader2 className="w-8 h-8 animate-spin text-white" />
+            {isLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
+                <Loader2 className="w-8 h-8 animate-spin text-white mb-2" />
+                <p className="text-xs text-white/70">Loading video... {progress > 0 ? `${progress}%` : ''}</p>
               </div>
             )}
-            {videoError ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+            {videoError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-20">
                 <div className="text-center p-4">
                   <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-amber-500" />
                   <p className="text-xs text-muted-foreground">{videoError}</p>
                 </div>
               </div>
-            ) : null}
-            <video 
-              src={videoUrl} 
-              controls 
-              className="w-full h-full object-contain"
-              onError={handleVideoError}
-              onLoadedData={handleVideoLoad}
-              onCanPlay={handleVideoLoad}
-            >
-              Your browser does not support video playback.
-            </video>
+            )}
+            {blobUrl && !videoError && (
+              <video 
+                src={blobUrl}
+                controls 
+                className="w-full h-full object-contain"
+                onError={() => setVideoError('Video playback failed')}
+              />
+            )}
           </div>
-          {/* Show URL for debugging */}
-          <details className="text-xs">
-            <summary className="text-muted-foreground cursor-pointer hover:text-foreground">Video URL</summary>
-            <code className="block mt-1 p-2 bg-muted rounded text-[10px] break-all">{videoUrl}</code>
-          </details>
+          {/* Show S3 path for reference */}
+          <div className="text-[10px] text-muted-foreground font-mono bg-muted/30 px-2 py-1 rounded truncate">
+            {selectedVideo}
+          </div>
         </div>
       ) : (
         <div className="aspect-video rounded-lg bg-muted/30 border-2 border-dashed border-border flex items-center justify-center">
