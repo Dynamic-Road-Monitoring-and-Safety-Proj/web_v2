@@ -2,7 +2,7 @@
 // City-based table structure: road_{city}_damage, road_{city}_congestion
 
 import { DynamoDBClient, ScanCommand, ListTablesCommand } from '@aws-sdk/client-dynamodb';
-import { S3Client, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {
@@ -113,6 +113,51 @@ export const getPresignedVideoUrl = async (s3Uri: string, expiresIn: number = 36
   
   const signedUrl = await getSignedUrl(client, command, { expiresIn });
   return signedUrl;
+};
+
+/**
+ * Upload a user-reported pothole image to S3
+ * @param file The image file to upload
+ * @param hexId The H3 hex ID for the location
+ * @param username The reporter's name
+ * @returns The S3 key of the uploaded file
+ */
+export const uploadPotholeReport = async (
+  file: File,
+  hexId: string,
+  username: string
+): Promise<{ success: boolean; key?: string; error?: string }> => {
+  try {
+    const client = getS3Client();
+    
+    // Format: dd-mm-yyyy_hexid_username.ext
+    const now = new Date();
+    const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    const sanitizedUsername = username.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const sanitizedHexId = hexId.replace(/[^a-zA-Z0-9]/g, '_');
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    
+    const key = `user_reportings/${dateStr}_${sanitizedHexId}_${sanitizedUsername}.${ext}`;
+    
+    // Read file as ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    const body = new Uint8Array(arrayBuffer);
+    
+    const command = new PutObjectCommand({
+      Bucket: 'rdcm.s3',
+      Key: key,
+      Body: body,
+      ContentType: file.type || 'image/jpeg',
+    });
+    
+    await client.send(command);
+    
+    console.log('Uploaded pothole report:', key);
+    return { success: true, key };
+  } catch (error: any) {
+    console.error('Failed to upload pothole report:', error);
+    return { success: false, error: error.message };
+  }
 };
 
 /**

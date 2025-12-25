@@ -60,277 +60,78 @@ const getVideoFilename = (url: string): string => {
   return parts[parts.length - 1] || url;
 };
 
-// Helper: Detect video MIME type from file extension or magic bytes
-const detectVideoMimeType = (filename: string, bytes: Uint8Array): string => {
-  // Check magic bytes first
-  if (bytes.length >= 12) {
-    // MP4: starts with ftyp at byte 4
-    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-      return 'video/mp4';
-    }
-    // WebM: starts with 0x1A 0x45 0xDF 0xA3
-    if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) {
-      return 'video/webm';
-    }
-    // AVI: starts with RIFF....AVI
-    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
-      return 'video/x-msvideo';
-    }
-    // MOV: can also have ftyp
-    if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
-      const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
-      if (brand === 'qt  ') return 'video/quicktime';
-    }
-  }
-  
-  // Fallback to extension
-  const ext = filename.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'mp4': case 'm4v': return 'video/mp4';
-    case 'webm': return 'video/webm';
-    case 'ogv': case 'ogg': return 'video/ogg';
-    case 'mov': return 'video/quicktime';
-    case 'avi': return 'video/x-msvideo';
-    case 'mkv': return 'video/x-matroska';
-    default: return 'video/mp4'; // default assumption
-  }
-};
-
 // ============================================
-// Video Player Component - Fetches video as blob
+// Video Download Button - Download all videos for a hex
 // ============================================
-const VideoPlayer = ({ 
-  videos, 
-  selectedVideo, 
-  onVideoChange 
-}: { 
-  videos: string[]; 
-  selectedVideo: string | null;
-  onVideoChange: (video: string | null) => void;
-}) => {
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [progress, setProgress] = useState<number>(0);
-  const [videoInfo, setVideoInfo] = useState<string>('');
+const VideoDownloadButton = ({ videos }: { videos: string[] }) => {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Fetch video as blob when selected - this bypasses content-type issues
-  useEffect(() => {
-    if (!selectedVideo) {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-      setBlobUrl(null);
-      setVideoError(null);
-      setProgress(0);
-      setVideoInfo('');
-      return;
-    }
-
-    let cancelled = false;
-    const controller = new AbortController();
-
-    const fetchVideo = async () => {
-      setIsLoading(true);
-      setVideoError(null);
-      setProgress(0);
-      setVideoInfo('');
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-      setBlobUrl(null);
-
-      try {
-        // Get presigned URL
-        const presignedUrl = await getPresignedVideoUrl(selectedVideo);
-        console.log('Fetching video from:', presignedUrl);
-
-        // Fetch the video as a blob
-        const response = await fetch(presignedUrl, { signal: controller.signal });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
-        }
-
-        const contentLength = response.headers.get('content-length');
-        const contentType = response.headers.get('content-type');
-        const total = contentLength ? parseInt(contentLength, 10) : 0;
-        
-        console.log('Response headers:', { contentLength, contentType });
-        
-        // Read the response body in chunks to track progress
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('Unable to read response');
-
-        const chunks: Uint8Array[] = [];
-        let received = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (cancelled) return;
-          
-          chunks.push(value);
-          received += value.length;
-          if (total > 0) {
-            setProgress(Math.round((received / total) * 100));
-          }
-        }
-
-        if (cancelled) return;
-
-        // Combine all chunks into a single Uint8Array
-        const combinedLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-        const combined = new Uint8Array(combinedLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-          combined.set(chunk, offset);
-          offset += chunk.length;
-        }
-
-        // Detect the actual MIME type
-        const filename = getVideoFilename(selectedVideo);
-        const mimeType = detectVideoMimeType(filename, combined);
-        console.log('Detected MIME type:', mimeType, 'Size:', combined.length);
-        
-        // Log first few bytes for debugging
-        const headerBytes = Array.from(combined.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-        console.log('File header bytes:', headerBytes);
-
-        // Create blob with detected MIME type
-        const blob = new Blob([combined], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        setBlobUrl(url);
-        setVideoInfo(`${mimeType} | ${(combined.length / 1024 / 1024).toFixed(2)} MB`);
-        setIsLoading(false);
-      } catch (err: any) {
-        if (cancelled || err.name === 'AbortError') return;
-        console.error('Video fetch error:', err);
-        setVideoError(err.message || 'Failed to load video');
-        setIsLoading(false);
-      }
-    };
-
-    fetchVideo();
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [selectedVideo]);
-
-  // Cleanup blob URL on unmount
-  useEffect(() => {
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [blobUrl]);
-
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const video = e.currentTarget;
-    const err = video.error;
-    console.error('Video element error:', err?.code, err?.message);
+  const downloadAllVideos = async () => {
+    if (videos.length === 0) return;
     
-    // Check for codec issues
-    if (err?.message?.includes('NO_SUPPORTED_STREAMS') || err?.message?.includes('DEMUXER_ERROR')) {
-      setVideoError('Unsupported codec (likely H.265/HEVC). Chrome only supports H.264. Try downloading and playing in VLC.');
-    } else {
-      setVideoError(`Playback failed: ${err?.message || 'Unknown error'} (Code: ${err?.code})`);
+    setIsDownloading(true);
+    setProgress({ current: 0, total: videos.length });
+
+    for (let i = 0; i < videos.length; i++) {
+      try {
+        setProgress({ current: i + 1, total: videos.length });
+        const presignedUrl = await getPresignedVideoUrl(videos[i]);
+        const filename = getVideoFilename(videos[i]);
+        
+        // Fetch the video as a blob to ensure proper download
+        const response = await fetch(presignedUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        }, 100);
+        
+        // Wait between downloads to prevent browser blocking
+        if (i < videos.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (err) {
+        console.error(`Failed to download video ${i + 1}:`, err);
+      }
     }
+
+    setIsDownloading(false);
+    setProgress(null);
   };
 
-  const handleDownload = () => {
-    if (blobUrl && selectedVideo) {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = getVideoFilename(selectedVideo);
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-  };
-
-  if (videos.length === 0) {
-    return (
-      <div className="text-xs text-muted-foreground text-center py-3 bg-muted/30 rounded-lg">
-        <Video className="w-4 h-4 mx-auto mb-1 opacity-50" />
-        No videos available
-      </div>
-    );
-  }
+  if (videos.length === 0) return null;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Video className="w-4 h-4 text-muted-foreground" />
-        <Select 
-          value={selectedVideo || "placeholder"} 
-          onValueChange={(v) => onVideoChange(v === "placeholder" ? null : v)}
-        >
-          <SelectTrigger className="h-8 text-xs flex-1">
-            <SelectValue placeholder="Select a video..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="placeholder">
-              <span className="text-muted-foreground">No video selected</span>
-            </SelectItem>
-            {videos.map((video, i) => (
-              <SelectItem key={i} value={video}>
-                <span className="font-mono text-xs">{getVideoFilename(video)}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      
-      {selectedVideo ? (
-        <div className="space-y-2">
-          <div className="relative aspect-video rounded-lg overflow-hidden bg-black border border-border">
-            {isLoading && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
-                <Loader2 className="w-8 h-8 animate-spin text-white mb-2" />
-                <p className="text-xs text-white/70">Loading video... {progress > 0 ? `${progress}%` : ''}</p>
-              </div>
-            )}
-            {videoError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-20">
-                <div className="text-center p-4">
-                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-amber-500" />
-                  <p className="text-xs text-muted-foreground mb-3">{videoError}</p>
-                  {blobUrl && (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={handleDownload}
-                      className="h-7 text-xs"
-                    >
-                      <Download className="w-3 h-3 mr-1" />
-                      Download Video
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-            {blobUrl && !videoError && (
-              <video 
-                src={blobUrl}
-                controls 
-                className="w-full h-full object-contain"
-                onError={handleVideoError}
-              />
-            )}
-          </div>
-          {/* Show video info */}
-          <div className="flex justify-between text-[10px] text-muted-foreground font-mono bg-muted/30 px-2 py-1 rounded">
-            <span className="truncate flex-1">{selectedVideo}</span>
-            {videoInfo && <span className="ml-2 text-green-500">{videoInfo}</span>}
-          </div>
-        </div>
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={downloadAllVideos}
+      disabled={isDownloading}
+      className="w-full h-9 text-xs"
+    >
+      {isDownloading ? (
+        <>
+          <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+          Downloading {progress?.current}/{progress?.total}...
+        </>
       ) : (
-        <div className="aspect-video rounded-lg bg-muted/30 border-2 border-dashed border-border flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Play className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-xs">Select a video to preview</p>
-          </div>
-        </div>
+        <>
+          <Download className="w-3 h-3 mr-2" />
+          Download All Videos ({videos.length})
+        </>
       )}
-    </div>
+    </Button>
   );
 };
 
@@ -501,19 +302,6 @@ const Dashboard = () => {
   const [selectedCongestion, setSelectedCongestion] = useState<CongestionItem | null>(null);
   const [selectedDamage, setSelectedDamage] = useState<DamageItem | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
-  
-  // Video Selection State
-  const [selectedCongestionVideo, setSelectedCongestionVideo] = useState<string | null>(null);
-  const [selectedDamageVideo, setSelectedDamageVideo] = useState<string | null>(null);
-  
-  // Reset video selection when hex selection changes
-  useEffect(() => {
-    setSelectedCongestionVideo(null);
-  }, [selectedCongestion?.hex_id]);
-  
-  useEffect(() => {
-    setSelectedDamageVideo(null);
-  }, [selectedDamage?.hex_id]);
   
   // Filter State
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -1038,7 +826,7 @@ const Dashboard = () => {
                       onClick={() => setMapViewMode('damage')}
                     >
                       <Route className="w-3 h-3 mr-1" />
-                      Quality
+                      Road Quality
                     </Button>
                   </div>
                 </div>
@@ -1159,16 +947,13 @@ const Dashboard = () => {
                         {new Date(selectedCongestion.last_updated).toLocaleString()}
                       </div>
                     </div>
-                    
-                    {/* Video Player */}
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="text-xs text-muted-foreground mb-2">Recent Videos ({selectedCongestion.last_5_videos.length})</div>
-                      <VideoPlayer 
-                        videos={selectedCongestion.last_5_videos}
-                        selectedVideo={selectedCongestionVideo}
-                        onVideoChange={setSelectedCongestionVideo}
-                      />
-                    </div>
+
+                    {/* Download Videos Button */}
+                    {selectedCongestion.last_5_videos.length > 0 && (
+                      <div className="pt-3 border-t border-border/50">
+                        <VideoDownloadButton videos={selectedCongestion.last_5_videos} />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1312,16 +1097,13 @@ const Dashboard = () => {
                         </div>
                       )}
                     </div>
-                    
-                    {/* Video Player */}
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="text-xs text-muted-foreground mb-2">Recent Videos ({selectedDamage.last_5_videos.length})</div>
-                      <VideoPlayer 
-                        videos={selectedDamage.last_5_videos}
-                        selectedVideo={selectedDamageVideo}
-                        onVideoChange={setSelectedDamageVideo}
-                      />
-                    </div>
+
+                    {/* Download Videos Button */}
+                    {selectedDamage.last_5_videos.length > 0 && (
+                      <div className="pt-3 border-t border-border/50">
+                        <VideoDownloadButton videos={selectedDamage.last_5_videos} />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -38,6 +38,7 @@ export const Navigation = () => {
     { label: "Dashboard", href: "/dashboard" },
     { label: "Alerts", href: "/alerts" },
     { label: "Reports", href: "/reports" },
+    { label: "Report Pothole", href: "/report-pothole" },
     { label: "AQI", href: "/aqi" },
     { label: "About", href: "/about" },
   ];
