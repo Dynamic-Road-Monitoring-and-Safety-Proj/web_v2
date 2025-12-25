@@ -18,24 +18,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
-            }
-            if (id.includes('recharts') || id.includes('d3-')) {
-              return 'vendor-charts';
-            }
-            if (id.includes('aws-sdk') || id.includes('@aws-sdk')) {
-              return 'vendor-aws';
-            }
-            if (id.includes('h3-js')) {
-              return 'vendor-h3';
-            }
-            if (id.includes('leaflet')) {
-              return 'vendor-leaflet';
-            }
-          }
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-leaflet': ['leaflet', 'react-leaflet'],
+          'vendor-h3': ['h3-js'],
         },
       },
     },

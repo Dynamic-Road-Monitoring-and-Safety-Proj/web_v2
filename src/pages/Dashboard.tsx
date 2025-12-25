@@ -41,7 +41,7 @@ import {
   filterCongestionByLevel,
   filterDamageByClassification,
   getPresignedVideoUrl,
-} from "@/lib/dynamodb";
+} from "@/lib/api";
 import {
   CongestionItem,
   DamageItem,

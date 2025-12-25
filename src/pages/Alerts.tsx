@@ -11,7 +11,7 @@ import {
   fetchAvailableCities,
   getCongestionColor,
   getDamageColor,
-} from "@/lib/dynamodb";
+} from "@/lib/api";
 import { CongestionItem, DamageItem, CityInfo } from "@/lib/types";
 
 // Alert type derived from data

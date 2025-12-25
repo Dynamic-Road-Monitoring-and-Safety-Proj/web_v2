@@ -37,7 +37,7 @@ import {
 import {
   fetchAllData,
   fetchAvailableCities,
-} from "@/lib/dynamodb";
+} from "@/lib/api";
 import { CongestionItem, DamageItem, DashboardStats, CityInfo } from "@/lib/types";
 
 const containerVariants = {

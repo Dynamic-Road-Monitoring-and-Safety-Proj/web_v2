@@ -16,7 +16,7 @@ import {
   Sparkles,
   Send
 } from "lucide-react";
-import { uploadPotholeReport } from "@/lib/dynamodb";
+import { uploadPotholeReport } from "@/lib/api";
 import { latLngToCell } from "h3-js";
 
 // ============================================
@@ -57,39 +57,71 @@ const ReportPothole = () => {
     setIsGettingLocation(true);
     setLocationError(null);
 
+    const successCallback = (position: GeolocationPosition) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setLocation({ lat, lng });
+      
+      // Convert to H3 hex ID (resolution 9 is good for street-level)
+      try {
+        const h3Index = latLngToCell(lat, lng, 9);
+        setHexId(h3Index);
+      } catch (err) {
+        console.error("Failed to convert to H3:", err);
+        setHexId(`${lat.toFixed(6)}_${lng.toFixed(6)}`);
+      }
+      
+      setIsGettingLocation(false);
+    };
+
+    const errorCallback = (error: GeolocationPositionError) => {
+      // If high accuracy times out, try with low accuracy
+      if (error.code === error.TIMEOUT) {
+        console.log("High accuracy timed out, trying low accuracy...");
+        navigator.geolocation.getCurrentPosition(
+          successCallback,
+          (err) => {
+            setIsGettingLocation(false);
+            switch (err.code) {
+              case err.PERMISSION_DENIED:
+                setLocationError("Location permission denied. Please enable location access.");
+                break;
+              case err.POSITION_UNAVAILABLE:
+                setLocationError("Location information is unavailable.");
+                break;
+              case err.TIMEOUT:
+                setLocationError("Location request timed out. Please try again or check your GPS settings.");
+                break;
+              default:
+                setLocationError("An unknown error occurred.");
+            }
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 60000, // Accept cached location up to 1 minute old
+          }
+        );
+        return;
+      }
+
+      setIsGettingLocation(false);
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          setLocationError("Location permission denied. Please enable location access.");
+          break;
+        case error.POSITION_UNAVAILABLE:
+          setLocationError("Location information is unavailable.");
+          break;
+        default:
+          setLocationError("An unknown error occurred.");
+      }
+    };
+
+    // First try with high accuracy (GPS)
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setLocation({ lat, lng });
-        
-        // Convert to H3 hex ID (resolution 9 is good for street-level)
-        try {
-          const h3Index = latLngToCell(lat, lng, 9);
-          setHexId(h3Index);
-        } catch (err) {
-          console.error("Failed to convert to H3:", err);
-          setHexId(`${lat.toFixed(6)}_${lng.toFixed(6)}`);
-        }
-        
-        setIsGettingLocation(false);
-      },
-      (error) => {
-        setIsGettingLocation(false);
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            setLocationError("Location permission denied. Please enable location access.");
-            break;
-          case error.POSITION_UNAVAILABLE:
-            setLocationError("Location information is unavailable.");
-            break;
-          case error.TIMEOUT:
-            setLocationError("Location request timed out.");
-            break;
-          default:
-            setLocationError("An unknown error occurred.");
-        }
-      },
+      successCallback,
+      errorCallback,
       {
         enableHighAccuracy: true,
         timeout: 10000,

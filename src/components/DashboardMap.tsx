@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Polygon, Popup, useMap, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { CongestionItem, DamageItem } from '@/lib/types';
-import { getCongestionColor, getDamageColor } from '@/lib/dynamodb';
+import { getCongestionColor, getDamageColor } from '@/lib/api';
 
 interface DashboardMapProps {
   congestionData: CongestionItem[];
