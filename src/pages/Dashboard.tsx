@@ -25,7 +25,12 @@ import {
   ThermometerSun,
   Route,
   Clock,
-  Eye
+  Eye,
+  Video,
+  Play,
+  Bike,
+  Bus,
+  Truck
 } from "lucide-react";
 import { DashboardMap } from "@/components/DashboardMap";
 import {
@@ -35,6 +40,7 @@ import {
   getDamageColor,
   filterCongestionByLevel,
   filterDamageByClassification,
+  getPresignedVideoUrl,
 } from "@/lib/dynamodb";
 import {
   CongestionItem,
@@ -45,6 +51,200 @@ import {
   CONGESTION_LEVELS,
   PROPHET_CLASSIFICATIONS,
 } from "@/lib/types";
+
+// ============================================
+// Helper: Extract video filename from S3 URL
+// ============================================
+const getVideoFilename = (url: string): string => {
+  const parts = url.split('/');
+  return parts[parts.length - 1] || url;
+};
+
+// ============================================
+// Helper: Convert S3 URI to public URL
+// ============================================
+const getVideoUrl = (s3Uri: string): string => {
+  // Handle different S3 URI formats
+  // s3://bucket-name/key -> https://bucket-name.s3.region.amazonaws.com/key
+  // s3://rdcm.s3/videos/... -> https://rdcm.s3.ap-south-1.amazonaws.com/videos/...
+  
+  if (s3Uri.startsWith('s3://')) {
+    // Extract bucket and key from s3://bucket/key format
+    const withoutProtocol = s3Uri.replace('s3://', '');
+    const slashIndex = withoutProtocol.indexOf('/');
+    if (slashIndex > 0) {
+      const bucket = withoutProtocol.substring(0, slashIndex);
+      const key = withoutProtocol.substring(slashIndex + 1);
+      // Check if bucket already has .s3 suffix
+      if (bucket.endsWith('.s3')) {
+        const actualBucket = bucket.replace('.s3', '');
+        return `https://${actualBucket}.s3.ap-south-1.amazonaws.com/${key}`;
+      }
+      return `https://${bucket}.s3.ap-south-1.amazonaws.com/${key}`;
+    }
+  }
+  return s3Uri;
+};
+
+// ============================================
+// Video Player Component
+// ============================================
+const VideoPlayer = ({ 
+  videos, 
+  selectedVideo, 
+  onVideoChange 
+}: { 
+  videos: string[]; 
+  selectedVideo: string | null;
+  onVideoChange: (video: string | null) => void;
+}) => {
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = e.currentTarget;
+    setIsLoading(false);
+    if (video.error) {
+      setVideoError(`Failed to load video: ${video.error.message || 'Video not accessible'}`);
+    } else {
+      setVideoError('Video could not be loaded. The file may not exist or the bucket may not be public.');
+    }
+  };
+
+  const handleVideoLoad = () => {
+    setIsLoading(false);
+    setVideoError(null);
+  };
+
+  // Reset error when video changes
+  useEffect(() => {
+    setVideoError(null);
+    if (selectedVideo) {
+      setIsLoading(true);
+    }
+  }, [selectedVideo]);
+
+  if (videos.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground text-center py-3 bg-muted/30 rounded-lg">
+        <Video className="w-4 h-4 mx-auto mb-1 opacity-50" />
+        No videos available
+      </div>
+    );
+  }
+
+  const videoUrl = selectedVideo ? getVideoUrl(selectedVideo) : null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Video className="w-4 h-4 text-muted-foreground" />
+        <Select 
+          value={selectedVideo || "placeholder"} 
+          onValueChange={(v) => onVideoChange(v === "placeholder" ? null : v)}
+        >
+          <SelectTrigger className="h-8 text-xs flex-1">
+            <SelectValue placeholder="Select a video..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="placeholder">
+              <span className="text-muted-foreground">No video selected</span>
+            </SelectItem>
+            {videos.map((video, i) => (
+              <SelectItem key={i} value={video}>
+                <span className="font-mono text-xs">{getVideoFilename(video)}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      {selectedVideo && videoUrl ? (
+        <div className="space-y-2">
+          <div className="relative aspect-video rounded-lg overflow-hidden bg-black border border-border">
+            {isLoading && !videoError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+                <Loader2 className="w-8 h-8 animate-spin text-white" />
+              </div>
+            )}
+            {videoError ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+                <div className="text-center p-4">
+                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-amber-500" />
+                  <p className="text-xs text-muted-foreground">{videoError}</p>
+                </div>
+              </div>
+            ) : null}
+            <video 
+              src={videoUrl} 
+              controls 
+              className="w-full h-full object-contain"
+              onError={handleVideoError}
+              onLoadedData={handleVideoLoad}
+              onCanPlay={handleVideoLoad}
+            >
+              Your browser does not support video playback.
+            </video>
+          </div>
+          {/* Show URL for debugging */}
+          <details className="text-xs">
+            <summary className="text-muted-foreground cursor-pointer hover:text-foreground">Video URL</summary>
+            <code className="block mt-1 p-2 bg-muted rounded text-[10px] break-all">{videoUrl}</code>
+          </details>
+        </div>
+      ) : (
+        <div className="aspect-video rounded-lg bg-muted/30 border-2 border-dashed border-border flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <Play className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-xs">Select a video to preview</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// Vehicle Detailed Breakdown Component
+// ============================================
+const VehicleDetailedBreakdown = ({ detailed }: { detailed?: { [key: string]: number } }) => {
+  if (!detailed) return null;
+  
+  const vehicleIcons: { [key: string]: React.ReactNode } = {
+    car: <Car className="w-3 h-3" />,
+    Car: <Car className="w-3 h-3" />,
+    motorcycle: <Bike className="w-3 h-3" />,
+    bicycle: <Bike className="w-3 h-3" />,
+    bus: <Bus className="w-3 h-3" />,
+    Bus: <Bus className="w-3 h-3" />,
+    truck: <Truck className="w-3 h-3" />,
+    auto_rickshaw: <Car className="w-3 h-3" />,
+    e_rickshaw: <Car className="w-3 h-3" />,
+    cycle_rickshaw: <Bike className="w-3 h-3" />,
+    tractor: <Truck className="w-3 h-3" />,
+  };
+
+  const nonZeroVehicles = Object.entries(detailed)
+    .filter(([_, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (nonZeroVehicles.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs text-muted-foreground">Vehicle Breakdown</div>
+      <div className="grid grid-cols-2 gap-1">
+        {nonZeroVehicles.map(([type, count]) => (
+          <div key={type} className="flex items-center gap-1.5 text-xs bg-muted/50 px-2 py-1 rounded">
+            {vehicleIcons[type] || <Car className="w-3 h-3" />}
+            <span className="capitalize">{type.replace('_', ' ')}</span>
+            <span className="ml-auto font-medium">{count.toFixed(1)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // ============================================
 // Animated Gauge Component
@@ -171,6 +371,19 @@ const Dashboard = () => {
   const [selectedCongestion, setSelectedCongestion] = useState<CongestionItem | null>(null);
   const [selectedDamage, setSelectedDamage] = useState<DamageItem | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  
+  // Video Selection State
+  const [selectedCongestionVideo, setSelectedCongestionVideo] = useState<string | null>(null);
+  const [selectedDamageVideo, setSelectedDamageVideo] = useState<string | null>(null);
+  
+  // Reset video selection when hex selection changes
+  useEffect(() => {
+    setSelectedCongestionVideo(null);
+  }, [selectedCongestion?.hex_id]);
+  
+  useEffect(() => {
+    setSelectedDamageVideo(null);
+  }, [selectedDamage?.hex_id]);
   
   // Filter State
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -506,9 +719,9 @@ const Dashboard = () => {
                 <div className="flex items-center gap-6 p-4 rounded-xl bg-gradient-to-br from-green-500/5 to-transparent border border-green-500/10">
                   <AnimatedGauge
                     value={stats?.avgRideComfort || 0}
-                    max={10}
+                    max={100}
                     label="Ride Comfort"
-                    sublabel="Score 0-10"
+                    sublabel="Score 0-100"
                     icon={ThermometerSun}
                     color="success"
                   />
@@ -735,7 +948,7 @@ const Dashboard = () => {
           </div>
 
           {/* Right: Details */}
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
             {/* Congestion Details */}
             {selectedCongestion && (
               <Card className="glass-card shadow-card">
@@ -779,18 +992,23 @@ const Dashboard = () => {
 
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">Vehicle Composition</div>
-                      <div className="flex gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          L: {selectedCongestion.vehicle_composition.light}
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
+                          Light: {selectedCongestion.vehicle_composition.light.toFixed(1)}%
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          M: {selectedCongestion.vehicle_composition.medium}
+                        <Badge variant="outline" className="text-xs bg-amber-500/10 border-amber-500/30">
+                          Medium: {selectedCongestion.vehicle_composition.medium.toFixed(1)}%
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          H: {selectedCongestion.vehicle_composition.heavy}
+                        <Badge variant="outline" className="text-xs bg-red-500/10 border-red-500/30">
+                          Heavy: {selectedCongestion.vehicle_composition.heavy.toFixed(1)}%
                         </Badge>
                       </div>
                     </div>
+
+                    {/* Vehicle Detailed Breakdown */}
+                    {selectedCongestion.vehicle_detailed && (
+                      <VehicleDetailedBreakdown detailed={selectedCongestion.vehicle_detailed as unknown as { [key: string]: number }} />
+                    )}
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -810,6 +1028,16 @@ const Dashboard = () => {
                       <div className="text-xs">
                         {new Date(selectedCongestion.last_updated).toLocaleString()}
                       </div>
+                    </div>
+                    
+                    {/* Video Player */}
+                    <div className="pt-2 border-t border-border/50">
+                      <div className="text-xs text-muted-foreground mb-2">Recent Videos ({selectedCongestion.last_5_videos.length})</div>
+                      <VideoPlayer 
+                        videos={selectedCongestion.last_5_videos}
+                        selectedVideo={selectedCongestionVideo}
+                        onVideoChange={setSelectedCongestionVideo}
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -848,22 +1076,22 @@ const Dashboard = () => {
                       <SeverityMeter 
                         label="Roughness Index" 
                         value={selectedDamage.derived_metrics.roughness_index} 
-                        max={5} 
+                        max={1} 
                       />
                       <SeverityMeter 
                         label="Spike Index" 
                         value={selectedDamage.derived_metrics.spike_index} 
-                        max={5} 
+                        max={1} 
                       />
                       <SeverityMeter 
                         label="Jerk Magnitude" 
                         value={selectedDamage.derived_metrics.jerk_magnitude} 
-                        max={10} 
+                        max={2} 
                       />
-                      <div className="flex justify-between text-xs">
+                      <div className="flex justify-between items-center text-xs bg-green-500/10 px-2 py-1.5 rounded">
                         <span className="text-muted-foreground">Ride Comfort</span>
-                        <span className="font-mono font-medium text-green-500">
-                          {selectedDamage.derived_metrics.ride_comfort_score.toFixed(1)}/10
+                        <span className={`font-mono font-bold ${selectedDamage.derived_metrics.ride_comfort_score >= 75 ? 'text-green-500' : selectedDamage.derived_metrics.ride_comfort_score >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {selectedDamage.derived_metrics.ride_comfort_score.toFixed(0)}/100
                         </span>
                       </div>
                     </div>
@@ -873,56 +1101,58 @@ const Dashboard = () => {
                     <div className="space-y-2">
                       <div className="text-xs text-muted-foreground">Damage Statistics</div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
+                        <div className="bg-muted/50 px-2 py-1.5 rounded">
                           <span className="text-muted-foreground">Potholes:</span>{' '}
                           <span className="font-medium">{selectedDamage.total_potholes}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/50 px-2 py-1.5 rounded">
                           <span className="text-muted-foreground">Cracks:</span>{' '}
                           <span className="font-medium">{selectedDamage.total_cracks}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/50 px-2 py-1.5 rounded">
                           <span className="text-muted-foreground">Severity:</span>{' '}
                           <span className="font-medium">{selectedDamage.damage_severity_score.toFixed(0)}/100</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/50 px-2 py-1.5 rounded">
                           <span className="text-muted-foreground">Damage Area:</span>{' '}
-                          <span className="font-medium">{selectedDamage.road_damage_area_avg.toFixed(1)}%</span>
+                          <span className="font-medium">{(selectedDamage.road_damage_area_avg * 100).toFixed(4)}%</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Sensor Metrics */}
+                    {/* Sensor Metrics - Collapsible */}
                     {selectedDamage.sensor_metrics && (
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="text-xs text-muted-foreground mb-2">Sensor Averages</div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
+                    <details className="pt-2 border-t border-border/50">
+                      <summary className="text-xs text-muted-foreground mb-2 cursor-pointer hover:text-foreground transition-colors">
+                        Sensor Averages (click to expand)
+                      </summary>
+                      <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+                        <div className="bg-muted/30 px-2 py-1 rounded">
                           <span className="text-muted-foreground">Acc X:</span>{' '}
                           <span className="font-mono">{selectedDamage.sensor_metrics.acc_x_avg.toFixed(3)}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/30 px-2 py-1 rounded">
                           <span className="text-muted-foreground">Gyro X:</span>{' '}
                           <span className="font-mono">{selectedDamage.sensor_metrics.gyro_x_avg.toFixed(4)}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/30 px-2 py-1 rounded">
                           <span className="text-muted-foreground">Acc Y:</span>{' '}
                           <span className="font-mono">{selectedDamage.sensor_metrics.acc_y_avg.toFixed(3)}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/30 px-2 py-1 rounded">
                           <span className="text-muted-foreground">Gyro Y:</span>{' '}
                           <span className="font-mono">{selectedDamage.sensor_metrics.gyro_y_avg.toFixed(4)}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/30 px-2 py-1 rounded">
                           <span className="text-muted-foreground">Acc Z:</span>{' '}
                           <span className="font-mono">{selectedDamage.sensor_metrics.acc_z_avg.toFixed(3)}</span>
                         </div>
-                        <div>
+                        <div className="bg-muted/30 px-2 py-1 rounded">
                           <span className="text-muted-foreground">Gyro Z:</span>{' '}
                           <span className="font-mono">{selectedDamage.sensor_metrics.gyro_z_avg.toFixed(4)}</span>
                         </div>
                       </div>
-                    </div>
+                    </details>
                     )}
 
                     <div className="grid grid-cols-2 gap-2">
@@ -936,21 +1166,32 @@ const Dashboard = () => {
                       </div>
                     </div>
 
-                    <div>
-                      <div className="text-xs text-muted-foreground">Last Updated</div>
-                      <div className="text-xs">
-                        {new Date(selectedDamage.last_updated).toLocaleString()}
-                      </div>
-                    </div>
-
-                    {selectedDamage.last_corporation_visit && (
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <div className="text-xs text-muted-foreground">Last Corp Visit</div>
+                        <div className="text-xs text-muted-foreground">Last Updated</div>
                         <div className="text-xs">
-                          {new Date(selectedDamage.last_corporation_visit).toLocaleString()}
+                          {new Date(selectedDamage.last_updated).toLocaleString()}
                         </div>
                       </div>
-                    )}
+                      {selectedDamage.last_corporation_visit && (
+                        <div>
+                          <div className="text-xs text-muted-foreground">Last Corp Visit</div>
+                          <div className="text-xs">
+                            {new Date(selectedDamage.last_corporation_visit).toLocaleString()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Video Player */}
+                    <div className="pt-2 border-t border-border/50">
+                      <div className="text-xs text-muted-foreground mb-2">Recent Videos ({selectedDamage.last_5_videos.length})</div>
+                      <VideoPlayer 
+                        videos={selectedDamage.last_5_videos}
+                        selectedVideo={selectedDamageVideo}
+                        onVideoChange={setSelectedDamageVideo}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

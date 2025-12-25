@@ -21,15 +21,18 @@ export interface VehicleComposition {
 }
 
 export interface VehicleDetailed {
-  car: number;
-  motorcycle: number;
-  bicycle: number;
-  cycle_rickshaw: number;
-  auto_rickshaw: number;
-  e_rickshaw: number;
-  bus: number;
-  truck: number;
-  tractor: number;
+  car?: number;
+  Car?: number;
+  motorcycle?: number;
+  bicycle?: number;
+  cycle_rickshaw?: number;
+  auto_rickshaw?: number;
+  e_rickshaw?: number;
+  bus?: number;
+  Bus?: number;
+  truck?: number;
+  tractor?: number;
+  [key: string]: number | undefined;  // Allow dynamic vehicle types
 }
 
 // ============================================

@@ -2,6 +2,8 @@
 // City-based table structure: road_{city}_damage, road_{city}_congestion
 
 import { DynamoDBClient, ScanCommand, ListTablesCommand } from '@aws-sdk/client-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import {
   CongestionItem,
@@ -49,6 +51,69 @@ const getDynamoClient = (): DynamoDBClient => {
     dynamoClient = new DynamoDBClient(getAwsConfig());
   }
   return dynamoClient;
+};
+
+// Create S3 client (lazy initialization)
+let s3Client: S3Client | null = null;
+
+const getS3Client = (): S3Client => {
+  if (!s3Client) {
+    s3Client = new S3Client(getAwsConfig());
+  }
+  return s3Client;
+};
+
+// ============================================
+// S3 Video URL Utilities
+// ============================================
+
+/**
+ * Parse S3 URI to bucket and key
+ * Handles formats like: s3://rdcm.s3/videos/... or s3://bucket-name/key
+ */
+const parseS3Uri = (s3Uri: string): { bucket: string; key: string } | null => {
+  if (!s3Uri.startsWith('s3://')) {
+    return null;
+  }
+  
+  const withoutProtocol = s3Uri.replace('s3://', '');
+  const slashIndex = withoutProtocol.indexOf('/');
+  
+  if (slashIndex <= 0) {
+    return null;
+  }
+  
+  let bucket = withoutProtocol.substring(0, slashIndex);
+  const key = withoutProtocol.substring(slashIndex + 1);
+  
+  // Handle bucket names with .s3 suffix (e.g., rdcm.s3 -> rdcm)
+  if (bucket.endsWith('.s3')) {
+    bucket = bucket.replace('.s3', '');
+  }
+  
+  return { bucket, key };
+};
+
+/**
+ * Generate a pre-signed URL for an S3 video
+ * @param s3Uri The S3 URI (e.g., s3://rdcm.s3/videos/...)
+ * @param expiresIn Expiration time in seconds (default: 1 hour)
+ */
+export const getPresignedVideoUrl = async (s3Uri: string, expiresIn: number = 3600): Promise<string> => {
+  const parsed = parseS3Uri(s3Uri);
+  
+  if (!parsed) {
+    throw new Error(`Invalid S3 URI: ${s3Uri}`);
+  }
+  
+  const client = getS3Client();
+  const command = new GetObjectCommand({
+    Bucket: parsed.bucket,
+    Key: parsed.key,
+  });
+  
+  const signedUrl = await getSignedUrl(client, command, { expiresIn });
+  return signedUrl;
 };
 
 // ============================================

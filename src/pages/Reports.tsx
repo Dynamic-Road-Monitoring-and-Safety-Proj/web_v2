@@ -151,19 +151,20 @@ const Reports = () => {
   }, [congestionData]);
 
   const comfortScoreDistribution = useMemo(() => {
-    const ranges = { '0-2.5': 0, '2.5-5': 0, '5-7.5': 0, '7.5-10': 0 };
+    // Comfort score is 0-100 scale based on actual data
+    const ranges = { 'Poor (0-25)': 0, 'Fair (25-50)': 0, 'Good (50-75)': 0, 'Excellent (75-100)': 0 };
     damageData.forEach(item => {
-      const score = item.derived_metrics?.ride_comfort_score || 5;
-      if (score <= 2.5) ranges['0-2.5']++;
-      else if (score <= 5) ranges['2.5-5']++;
-      else if (score <= 7.5) ranges['5-7.5']++;
-      else ranges['7.5-10']++;
+      const score = item.derived_metrics?.ride_comfort_score || 50;
+      if (score <= 25) ranges['Poor (0-25)']++;
+      else if (score <= 50) ranges['Fair (25-50)']++;
+      else if (score <= 75) ranges['Good (50-75)']++;
+      else ranges['Excellent (75-100)']++;
     });
     return [
-      { name: '0-2.5 (Poor)', value: ranges['0-2.5'], color: '#ef4444' },
-      { name: '2.5-5', value: ranges['2.5-5'], color: '#f97316' },
-      { name: '5-7.5', value: ranges['5-7.5'], color: '#eab308' },
-      { name: '7.5-10 (Good)', value: ranges['7.5-10'], color: '#22c55e' },
+      { name: 'Poor', value: ranges['Poor (0-25)'], color: '#ef4444' },
+      { name: 'Fair', value: ranges['Fair (25-50)'], color: '#f97316' },
+      { name: 'Good', value: ranges['Good (50-75)'], color: '#eab308' },
+      { name: 'Excellent', value: ranges['Excellent (75-100)'], color: '#22c55e' },
     ];
   }, [damageData]);
 
@@ -318,8 +319,8 @@ const Reports = () => {
           {/* Congestion Distribution */}
           <motion.div variants={itemVariants}>
             <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Car className="w-5 h-5" />
                   Traffic Congestion
                 </CardTitle>
@@ -336,17 +337,22 @@ const Reports = () => {
                         data={congestionDistribution}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={2}
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={3}
                         dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
+                        labelLine={false}
                       >
                         {congestionDistribution.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip formatter={(value, name) => [`${value} cells`, name]} />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => <span className="text-xs">{value}</span>}
+                      />
                     </RechartsPie>
                   </ResponsiveContainer>
                 </div>
@@ -357,8 +363,8 @@ const Reports = () => {
           {/* Road Quality Distribution */}
           <motion.div variants={itemVariants}>
             <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Route className="w-5 h-5" />
                   Road Quality
                 </CardTitle>
@@ -375,17 +381,22 @@ const Reports = () => {
                         data={damageDistribution}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={2}
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={3}
                         dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
+                        labelLine={false}
                       >
                         {damageDistribution.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip formatter={(value, name) => [`${value} cells`, name]} />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => <span className="text-xs">{value}</span>}
+                      />
                     </RechartsPie>
                   </ResponsiveContainer>
                 </div>
@@ -396,20 +407,35 @@ const Reports = () => {
           {/* Velocity by Road */}
           <motion.div variants={itemVariants}>
             <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <BarChart3 className="w-5 h-5" />
                   Average Velocity by Road
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
+                <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={velocityByRoad} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" unit=" km/h" />
-                      <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
-                      <Tooltip />
+                    <BarChart data={velocityByRoad} layout="vertical" margin={{ left: 10, right: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis 
+                        type="number" 
+                        unit=" km/h" 
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        width={90} 
+                        tick={{ fontSize: 9 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [`${value.toFixed(1)} km/h`, 'Avg Velocity']}
+                        contentStyle={{ fontSize: '12px' }}
+                      />
                       <Bar dataKey="velocity" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -421,20 +447,34 @@ const Reports = () => {
           {/* Comfort Score Distribution */}
           <motion.div variants={itemVariants}>
             <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <TrendingUp className="w-5 h-5" />
                   Ride Comfort Scores
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
+                <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comfortScoreDistribution}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
+                    <BarChart data={comfortScoreDistribution} margin={{ bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 9 }}
+                        angle={-20}
+                        textAnchor="end"
+                        height={50}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip 
+                        formatter={(value) => [`${value} cells`, 'Count']}
+                        contentStyle={{ fontSize: '12px' }}
+                      />
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                         {comfortScoreDistribution.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -457,66 +497,86 @@ const Reports = () => {
         >
           {/* Top Congested Areas */}
           <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="text-lg">Top Congested Areas</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Car className="w-4 h-4 text-orange-500" />
+                High Congestion Areas
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {congestionData
-                  .filter(c => c.congestion_level === 'critical' || c.congestion_level === 'high')
+                  .filter(c => c.congestion_level === 'high' || c.congestion_level === 'medium')
+                  .sort((a, b) => {
+                    if (a.congestion_level === 'high' && b.congestion_level !== 'high') return -1;
+                    if (b.congestion_level === 'high' && a.congestion_level !== 'high') return 1;
+                    return a.velocity_avg - b.velocity_avg;
+                  })
                   .slice(0, 5)
                   .map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="font-medium text-sm">{item.road_name}</p>
+                    <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{item.road_name}</p>
                         <p className="text-xs text-muted-foreground">
                           {item.velocity_avg.toFixed(1)} km/h • {item.vehicle_count_avg.toFixed(0)} vehicles
                         </p>
                       </div>
                       <Badge 
-                        variant={item.congestion_level === 'critical' ? 'destructive' : 'secondary'}
-                        className={item.congestion_level === 'high' ? 'bg-orange-500' : ''}
+                        variant="secondary"
+                        className={item.congestion_level === 'high' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}
                       >
                         {item.congestion_level}
                       </Badge>
                     </div>
                   ))}
-                {congestionData.filter(c => c.congestion_level === 'critical' || c.congestion_level === 'high').length === 0 && (
-                  <p className="text-muted-foreground text-sm text-center py-4">No critical congestion areas</p>
+                {congestionData.filter(c => c.congestion_level === 'high' || c.congestion_level === 'medium').length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-6">
+                    ✅ No high congestion areas detected
+                  </p>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Critical Road Damage */}
+          {/* Severe Road Damage */}
           <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="text-lg">Critical Road Damage</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Route className="w-4 h-4 text-red-500" />
+                Road Quality Issues
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {damageData
-                  .filter(d => d.prophet_classification === 'critical' || d.prophet_classification === 'poor')
+                  .filter(d => d.prophet_classification === 'severe' || d.prophet_classification === 'moderate')
+                  .sort((a, b) => {
+                    if (a.prophet_classification === 'severe' && b.prophet_classification !== 'severe') return -1;
+                    if (b.prophet_classification === 'severe' && a.prophet_classification !== 'severe') return 1;
+                    return (a.derived_metrics?.ride_comfort_score || 0) - (b.derived_metrics?.ride_comfort_score || 0);
+                  })
                   .slice(0, 5)
                   .map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="font-medium text-sm font-mono">{item.hex_id.slice(0, 12)}...</p>
+                    <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm font-mono truncate">{item.hex_id.slice(0, 14)}...</p>
                         <p className="text-xs text-muted-foreground">
-                          Comfort: {item.derived_metrics.ride_comfort_score.toFixed(0)}/100 • 
-                          Roughness: {item.derived_metrics.roughness_index.toFixed(3)}
+                          Comfort: {item.derived_metrics?.ride_comfort_score?.toFixed(0) || 'N/A'}/100 • 
+                          Roughness: {item.derived_metrics?.roughness_index?.toFixed(3) || 'N/A'}
                         </p>
                       </div>
                       <Badge 
-                        variant={item.prophet_classification === 'critical' ? 'destructive' : 'secondary'}
-                        className={item.prophet_classification === 'poor' ? 'bg-orange-500' : ''}
+                        variant="secondary"
+                        className={item.prophet_classification === 'severe' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}
                       >
                         {item.prophet_classification}
                       </Badge>
                     </div>
                   ))}
-                {damageData.filter(d => d.prophet_classification === 'critical' || d.prophet_classification === 'poor').length === 0 && (
-                  <p className="text-muted-foreground text-sm text-center py-4">No critical damage areas</p>
+                {damageData.filter(d => d.prophet_classification === 'severe' || d.prophet_classification === 'moderate').length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-6">
+                    ✅ No severe damage areas detected
+                  </p>
                 )}
               </div>
             </CardContent>
